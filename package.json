@@ -1,0 +1,56 @@
+{
+  "name": "easy-pwa",
+  "version": "1.0.0",
+  "description": "TODO",
+  "main": "src/easy-webapp.js",
+  "bin": "bin/cli.js",
+  "files": [
+    "index.js"
+  ],
+  "scripts": {
+    "lint:js": "eslint \"**/*.js\"",
+    "lint": "npm run lint:js",
+    "test": "npm install && npm run lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atjn/easy-pwa.git"
+  },
+  "keywords": [
+    "pwa"
+  ],
+  "author": {
+    "name": "atjn",
+    "email": "dev@atjn.dk",
+    "url": "https://github.com/atjn/"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/atjn/easy-pwa/issues"
+  },
+  "homepage": "https://github.com/atjn/easy-pwa#readme",
+  "dependencies": {
+    "chokidar": "^3.5.1",
+    "folder-hash": "^4.0.1",
+    "fs-extra": "^9.1.0",
+    "gauge": "^3.0.0",
+    "get-folder-size": "^2.0.1",
+    "imagemin": "^7.0.1",
+    "imagemin-mozjpeg": "^9.0.0",
+    "imagemin-optipng": "^8.0.0",
+    "imagemin-webp": "^6.0.0",
+    "jsdom": "^16.5.1",
+    "matcher": "^4.0.0",
+    "minify": "^7.0.1",
+    "pwa-asset-generator": "^4.1.1",
+    "svgo": "^2.2.2",
+    "workbox-build": "^6.1.2",
+    "yargs": "^16.2.0"
+  },
+  "devDependencies": {
+    "@atjn/eslint-config": "^2.1.1",
+    "eslint": "^7.22.0",
+    "eslint-plugin-jsdoc": "^32.3.0",
+    "eslint-plugin-promise": "^4.3.1"
+  }
+}
