@@ -14,34 +14,30 @@ const {hashElement} = require("folder-hash");
 module.exports = {
 
 	/**
-	 * Minifies a raster image (png, jpg, webp) and saves it in the epwa cache folder with a hash reference to the original image.
+	 * Minifies a raster image (png, jpg, webp) and saves it in the easy-webapp cache folder with a hash reference to the original image.
 	 *
-	 * @param	{string}	image_path			- Absolute path of the image to minify.
-	 * @param	{string}	cache_directory		- Absolute path of the epwa cache folder.
-	 * @param	{string[]}	target_extensions	- Which file extensions the image should be saved to. Defaults to the same extension as the input image.
+	 * @param	{string}	imagePath			- Absolute path of the image to minify.
+	 * @param	{string}	cacheDirectory		- Absolute path of the easy-webapp cache folder.
+	 * @param	{string[]}	targetExtensions	- Which file extensions the image should be saved to. Defaults to the same extension as the input image.
 	 * @param	{object}	[options]			- Options to pass to the minifier.
 	 * 
 	 * @returns	{Promise<number>}				- How many bytes were saved in the conversion.
 	 * 
 	 */
-	minify_image: async (image_path, cache_directory, target_extensions, options) => {
+	minifyImage: async (imagePath, cacheDirectory, targetExtensions, options) => {
 
-		const original_extension = path.extname(image_path).toLowerCase();
-		//target_extensions = target_extensions || [original_extension];
-
-		const original_hash = (await hashElement(image_path, {"encoding": "hex"})).hash;
-		const original_size = fs.statSync(image_path).size;
+		const imageHash = (await hashElement(imagePath, {"encoding": "hex"})).hash;
+		const imageSize = (await fs.stat(imagePath)).size;
 
 
 		//(ext === target_ext) ? console.log(`Minifying '${path.join(image_path)}'`) : console.log(`Converting '${path.join(image_path)}' to minified ${target_ext}`);
-		//actions_taken.images_minified.add(image_path);
 
-		return Promise.all(target_extensions.map(async target_extension => {
+		return Promise.all(targetExtensions.map(async targetExtension => {
 
-			const image_cache_path = path.join(cache_directory, original_hash + target_extension);
-			const new_image_path = image_path.replace(original_extension, target_extension);
+			const imageCachePath = path.join(cacheDirectory, `${imageHash}.${targetExtension}`);
+			const newImagePath = imagePath.replace(/\.\w+$/u, `.${targetExtension}`);
 
-			if(!fs.pathExistsSync(image_cache_path)){
+			if(!fs.pathExistsSync(imageCachePath)){
 
 				const imagemin = require("imagemin");
 				const imagemin_mozjpeg = require("imagemin-mozjpeg");
@@ -50,38 +46,38 @@ module.exports = {
 
 				const engines = [];
 
-				switch(target_extension){
-				case ".webp":
+				switch(targetExtension){
+				case "webp":
 					engines.push(imagemin_webp());
 					break;
-				case ".png":
+				case "png":
 					engines.push(imagemin_optipng());
 					break;
-				case ".jpg":
-				case ".jpeg":
+				case "jpg":
+				case "jpeg":
 					engines.push(imagemin_mozjpeg());
 					break;
 				default:
-					throw new Error(`Does not support minifying to image with extension "${target_extension}"`);
+					throw new Error(`Does not support minifying to image with extension "${targetExtension}"`);
 				}
 
 				await fs.writeFile(
-					image_cache_path, 
+					imageCachePath, 
 					await imagemin.buffer(
-						await fs.readFile(image_path),
+						await fs.readFile(imagePath),
 						{...{"plugins": engines}, ...options},
 					),
 				).catch(error => {
 					throw new Error(
-						`Failed to minify "${image_path}" to extension "${target_extension}". Error:
+						`Failed to minify "${imagePath}" to extension "${targetExtension}". Error:
 						${error}`,
 					);
 				});
 			}
 
-			fs.copySync(image_cache_path, new_image_path);
+			fs.copySync(imageCachePath, newImagePath);
 
-			return original_size - fs.statSync(image_cache_path).size;
+			return imageSize - fs.statSync(imageCachePath).size;
 
 		})).then(result => {
 
@@ -92,16 +88,16 @@ module.exports = {
 	},
 
 	/**
-	 * Minifies a file (html, css, js, json, svg) and saves it in the epwa cache folder with a hash reference to the original file.
+	 * Minifies a file (html, css, js, json, svg) and saves it in the easy-webapp cache folder with a hash reference to the original file.
 	 * 
 	 * @param	{string}	file_path		- Absolute path of the file to minify.
-	 * @param	{string}	cache_directory	- Absolute path of the epwa cache folder.
+	 * @param	{string}	cache_directory	- Absolute path of the easy-webapp cache folder.
 	 * @param	{object}	[options]		- Options to pass directly to the underlying minifier.
 	 * 
 	 * @returns {Promise<number>}			- How many bytes were saved in the conversion.
 	 * 
 	 */
-	minify_file: async (file_path, cache_directory, options) => {
+	minifyFile: async (file_path, cache_directory, options) => {
 
 		const extension = path.extname(file_path).toLowerCase();
 
@@ -171,22 +167,22 @@ module.exports = {
 	/**
 	 * Removes a file or directory (item).
 	 * 
-	 * @param	{string}	item_path	- Absolute path of the item to remove.
+	 * @param	{string}	itemPath	- Absolute path of the item to remove.
 	 * 
 	 * @returns	{Promise<number>}		- How many bytes were saved by removing the item.
 	 * 
 	 */
-	remove_item: async (item_path) => {
+	removeItem: async (itemPath) => {
 
-		const folder_size = require("get-folder-size");
+		const folderSize = require("get-folder-size");
 
-		const item_stats = fs.statSync(item_path);
+		const itemStats = fs.statSync(itemPath);
 
-		const item_size = item_stats.isDirectory() ? folder_size(item_path) : item_stats.size;
+		const itemSize = itemStats.isDirectory() ? folderSize(itemPath) : itemStats.size;
 
-		await fs.remove(item_path);
+		await fs.remove(itemPath);
 
-		return item_size;
+		return itemSize;
 
 	},
 

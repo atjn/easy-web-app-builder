@@ -10,9 +10,13 @@ const argv = yargs(hideBin(process.argv))
 		"type": "string",
 		"description": "Define the absolute path of easy-webapp's working directory (root). This is by default the same as Node's working directory.",
 	})
-	.option("config-path", {
+	.option("config-name", {
 		"type": "string",
-		"description": "Define an alternative path to the root config file.",
+		"description": "Define an alternative name for all easy-webapp config (ewaconfig) files.",
+	})
+	.option("use-cache", {
+		"type": "boolean",
+		"description": "Enable or disable use of a cache to speed things up.",
 	})
 	.epilogue("Only a few options are available through the CLI. To access all options, you must write a config object instead.")
 	.argv;
