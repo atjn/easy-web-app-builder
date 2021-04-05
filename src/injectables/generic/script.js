@@ -1,4 +1,8 @@
-"use strict";
+
+/**
+ * @file
+ * H.
+ */
 
 
 const load = () => {
