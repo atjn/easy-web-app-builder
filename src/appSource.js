@@ -8,7 +8,7 @@
 import path from "path";
 import fs from "fs-extra";
 
-import{log} from "./log.js";
+import {log} from "./log.js";
 import tools from "./tools.js";
 
 import jsdom from "jsdom";
@@ -19,7 +19,7 @@ export default {ensure};
 /**
  * Makes sure the app source folder exists, along with a few common files.
  */
-function ensure(){
+async function ensure(){
 
 	const sourcePath = path.join(ewaConfig.rootPath, ewaConfig.source);
 
@@ -48,9 +48,7 @@ function ensure(){
 		indexObject.window.document.appendChild(head);
 	}
 
-	ewaObjects.index = indexObject;
-
-	let indexManifest = ewaObjects.index.window.document.head.querySelector("link[rel=manifest]");
+	let indexManifest = indexObject.window.document.head.querySelector("link[rel=manifest]");
 	if(indexManifest && tools.fileExists(path.join(ewaConfig.rootPath, ewaConfig.output, indexManifest.href))){
 		log(`A reference to the manifest file was found in ${ewaConfig.index}. Overriding the config object.`);
 		ewaConfig.manifest = indexManifest.href;
@@ -66,8 +64,8 @@ function ensure(){
 		}
 
 		log(`Adding a reference to the manifest file in ${ewaConfig.index}.`);
-		indexManifest = ewaObjects.index.window.document.createElement("link"); indexManifest.href = ewaConfig.manifest;
-		ewaObjects.index.window.document.head.appendChild(indexManifest);
+		indexManifest = indexObject.window.document.createElement("link"); indexManifest.href = ewaConfig.manifest;
+		indexObject.window.document.head.appendChild(indexManifest);
 	}
 
 
@@ -76,7 +74,7 @@ function ensure(){
 
 	const foundIcons = [];
 
-	for(const icon of ewaObjects.index.window.document.head.querySelectorAll("link[rel*=icon]")){
+	for(const icon of indexObject.window.document.head.querySelectorAll("link[rel*=icon]")){
 		if(icon.href) foundIcons.push(path.join(icon.href));
 	}
 
@@ -98,6 +96,6 @@ function ensure(){
 		}
 	});
 
-	
+	await fs.writeFile(indexPath, indexObject.window.document.documentElement.outerHTML);
 
 }

@@ -20,6 +20,7 @@ import minify from "./minify.js";
 	
 /**
  * Desc.
+ * 
  * @param {object} callConfig - Can override some of the options found in a config file.
  */
 export default async function easyWebapp(callConfig = {}){
@@ -60,8 +61,6 @@ export default async function easyWebapp(callConfig = {}){
 	await minify("images");
 
 	await serviceworker.add();
-
-	await fs.writeFile(path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.index), ewaObjects.index.window.document.documentElement.outerHTML);
 
 	await fs.writeJson(path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.manifest), ewaObjects.manifest);
 

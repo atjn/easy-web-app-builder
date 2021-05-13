@@ -1,4 +1,4 @@
-/* global ewaConfig ewaObjects */
+/* global ewaConfig */
 
 /**
  * @file
@@ -8,12 +8,17 @@
 import path from "path";
 import fs from "fs-extra";
 
-import {hashElement} from "folder-hash";
+import {hashElement as folderHash} from "folder-hash";
+import objectHash from "object-hash";
 
 import {EWASourcePath} from "./compat.js";
 import {bar} from "./log.js";
 
 import {generateSW} from "workbox-build";
+
+import jsdom from "jsdom";
+import globModule from "glob";
+const glob = globModule.glob;
 
 
 export default {add};
@@ -62,16 +67,16 @@ async function add(){
 		};
 
 		const hash = {
-			"source_hash": (await hashElement(path.join(ewaConfig.rootPath, ewaConfig.output))).hash,
-			"config": workboxConfig,
+			"sourceHash": (await folderHash(path.join(ewaConfig.rootPath, ewaConfig.output))).hash,
+			"config": objectHash(workboxConfig),
 		};
 
 		fs.ensureFileSync(path.join(ewaConfig.cachePath, "serviceworker-hash.json"));
-		const cached_hash = fs.readJsonSync(path.join(ewaConfig.cachePath, "serviceworker-hash.json"), {throws: false});
+		const cachedHash = fs.readJsonSync(path.join(ewaConfig.cachePath, "serviceworker-hash.json"), {throws: false});
 
 		if(
-			hash.source_hash !== cached_hash?.source_hash ||
-			JSON.stringify(hash.config) !== JSON.stringify(cached_hash?.config)
+			hash.sourceHash !== cachedHash?.sourceHash ||
+			hash.config !== cachedHash?.config
 		){
 			bar(.05, "Generating serviceworker");
 
@@ -85,11 +90,16 @@ async function add(){
 
 		fs.copySync(path.join(EWASourcePath, "./src/injectables/add-serviceworker.js"), path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.alias, "add-serviceworker.js"));
 
-		const script = ewaObjects.index.window.document.createElement("script"); script.src = `${ewaConfig.alias}/add-serviceworker.js`; script.type = "module"; script.async = "true"; //async doesnt work
+		for(const markupPath of glob.sync("**/*.html", {cwd: path.join(ewaConfig.rootPath, ewaConfig.output), absolute: true})){
 
+			const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
 
-		ewaObjects.index.window.document.head.appendChild(script);
+			const script = html.window.document.createElement("script"); script.src = `${ewaConfig.alias}/add-serviceworker.js`; script.type = "module"; script.async = "true"; //async doesnt work
+			html.window.document.head.appendChild(script);
+		
+			await fs.writeFile(markupPath, html.window.document.documentElement.outerHTML);
 
+		}
 
 		fs.copySync(path.join(ewaConfig.cachePath, "serviceworker"), path.join(ewaConfig.rootPath, ewaConfig.output));
 

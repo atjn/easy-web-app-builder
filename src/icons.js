@@ -9,7 +9,13 @@ import path from "path";
 import fs from "fs-extra";
 
 
-import {hashElement} from "folder-hash";
+import {hashElement as folderHash} from "folder-hash";
+import objectHash from "object-hash";
+
+
+import jsdom from "jsdom";
+import globModule from "glob";
+const glob = globModule.glob;
 
 
 import {EWASourcePath} from "./compat.js";
@@ -39,23 +45,23 @@ async function add(){
 			type: "png",
 			opaque: false,
 			scrape: false,
-			favicon: Boolean(!ewaObjects.index.window.document.head.querySelector("link[rel=icon")),
+			favicon: true,
 			pathOverride: `${ewaConfig.alias}/icons`,
 			mstile: true,
 			log: false,
 		};
 
 		const hash = {
-			"source_hash": (await hashElement(path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.icons.source))).hash,
-			"config": generatorConfig,
+			"sourceHash": (await folderHash(path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.icons.source))).hash,
+			"config": objectHash(generatorConfig),
 		};
 
 		await fs.ensureFile(path.join(ewaConfig.cachePath, "icons-hash.json"));
 		const cachedHash = await fs.readJson(path.join(ewaConfig.cachePath, "icons-hash.json"), {throws: false});
 
 		if(
-			hash.source_hash !== cachedHash?.source_hash ||
-			JSON.stringify(hash.config) !== JSON.stringify(cachedHash?.config)
+			hash.sourceHash !== cachedHash?.sourceHash ||
+			hash.config !== cachedHash?.config
 		){
 
 			log("Icon cache was either missing, corrupt, or outdated, so building a new one");
@@ -99,11 +105,18 @@ async function add(){
 		ewaConfig.icons.list = [...ewaConfig.icons.list, ...tools.getFolderFiles(path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.alias, "icons")).map(iconPath => {return path.join(ewaConfig.alias, "icons", iconPath);})];
 
 
-		if(ewaConfig.icons.mergeMode.index === "override"){
-			for(const link of ewaObjects.index.window.document.head.querySelectorAll("link[rel*=icon")) link.remove();
-		}
-		ewaObjects.index.window.document.head.innerHTML += fs.readFileSync(path.join(ewaConfig.cachePath, "icons-injectables/index.html"));
+		for(const markupPath of glob.sync("**/*.html", {cwd: path.join(ewaConfig.rootPath, ewaConfig.output), absolute: true})){
 
+			const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
+
+			if(ewaConfig.icons.mergeMode.index === "override"){
+				for(const link of html.window.document.head.querySelectorAll("link[rel*=icon")) link.remove();
+			}
+			html.window.document.head.innerHTML += fs.readFileSync(path.join(ewaConfig.cachePath, "icons-injectables/index.html"));
+		
+			await fs.writeFile(markupPath, html.window.document.documentElement.outerHTML);
+
+		}
 
 		if(ewaConfig.icons.mergeMode.manifest === "override"){
 			ewaObjects.manifest.icons = [];

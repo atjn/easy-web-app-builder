@@ -8,7 +8,7 @@
 
 import path from "path";
 import fs from "fs-extra";
-import {hashElement as hashItem} from "folder-hash";
+import {hashElement as folderHash} from "folder-hash";
 
 import tools from "./tools.js";
 import {log} from "./log.js";
@@ -99,7 +99,7 @@ async function seal(){
  */
 async function generateHash(){
 
-	return (await hashItem(
+	return (await folderHash(
 		ewaConfig.cachePath,
 		{
 			"files": {

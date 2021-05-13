@@ -13,7 +13,32 @@ const glob = globModule.glob;
 
 import {EWASourcePath} from "./compat.js";
 
-export default {fileExists, getExtension, getFolderFiles, getAllItems, getEWAVersion};
+export default {fileExists, getExtension, getFolderFiles, getAllItems, getEWAVersion, resolveURL};
+
+/**
+ * Takes any URL format referenced from any file and turns it into an absolute path to the actual file in the filesystem.
+ * This does not fully adhere to the URL spec, but it is good enough for the purposes of this package.
+ * 
+ * @param	{string}	rootPath	- Absolute path to the folder that acts as the root domain for the app. 
+ * @param	{string}	filePath	- Absolute path to the file that the URL is referenced in.
+ * @param	{string}	URL 		- The URL from the file.
+ * 
+ * @returns	{string | null}	- An absolute path to the file that the URL was referring to, or null if the URL could not be parsed.
+ */
+function resolveURL(rootPath, filePath, URL){
+
+	const relativePath = URL.match(/^(?:https?:)?(?:\/\/)?(?:(?<=\/\/)[^/]+|[^/]+\.[^/]+(?=\/))?(?<path>.*)$/ui)?.groups?.path;
+
+	if(!relativePath) return null;
+
+	const absolutePath = path.join(
+		relativePath.startsWith("/") ? rootPath : path.join(filePath, ".."),
+		relativePath,
+	);
+
+	return absolutePath;
+
+}
 
 /**
  * Gets the current version of the app.
