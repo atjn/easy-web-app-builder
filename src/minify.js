@@ -9,10 +9,11 @@
 
 import path from "path";
 import fs from "fs-extra";
-import {hashElement as folderHash} from "folder-hash";
+import { hashElement as folderHash } from "folder-hash";
 import getItemSize from "get-folder-size";
-import {log, bar} from "./log.js";
-import tools from "./tools.js";
+import prettyBytes from "pretty-bytes";
+import { log, bar } from "./log.js";
+import { fileExists, getExtension, resolveURL } from "./tools.js";
 import config from "./config.js";
 
 //import imageSize from "image-size";
@@ -21,18 +22,17 @@ import jsdom from "jsdom";
 
 
 
-import { ImagePool } from "@squoosh/api";
+//import { ImagePool } from "@squoosh/lib";
 
 import os from "os";
 
 
-import globModule from "glob";
-const glob = globModule.glob;
+import glob from "glob";
 
-import {minify as htmlMinifier} from "html-minifier-terser";
-import {minify as terser} from "terser";
+import { minify as htmlMinifier } from "html-minifier-terser";
+import { minify as terser } from "terser";
 import CleanCSS from "clean-css";
-import {optimize as svgo} from "svgo";
+import { optimize as svgo } from "svgo";
 
 import asyncPool from "tiny-async-pool";
 
@@ -88,16 +88,17 @@ async function minify(type){
 
 	bar.begin(`${processName.action.present} ${processName.item.plural}`);
 
-	global.imagePool = type === "images" ? new ImagePool() : undefined;
+	//global.imagePool = type === "images" ? new ImagePool() : undefined;
+	global.ImagePool = {};
 
 	const itemProcesses = [];
 	const itemProcessResults = [];
 
-	for(const itemPath of glob.sync("**/*", {cwd: path.join(ewaConfig.rootPath, ewaConfig.output), absolute: true})){
+	for(const itemPath of glob.sync("**/*", {cwd: ewaConfig.workPath, absolute: true})){
 
-		if(["files", "images"].includes(type) && !tools.fileExists(itemPath)) continue;
+		if(["files", "images"].includes(type) && !fileExists(itemPath)) continue;
 
-		const extension = tools.getExtension(itemPath);
+		const extension = getExtension(itemPath);
 
 		if(
 			(type === "files" && !["html", "css", "js", "json", "svg"].includes(extension)) ||
@@ -141,7 +142,7 @@ async function minify(type){
 	if(itemProcesses.length === 0){
 		bar.hide();
 	}else{
-		bar.end(`${processName.action.past} ${itemProcesses.length} ${itemProcesses.length === 1 ? processName.item.singular : processName.item.plural}, saving ${(itemProcessResults.reduce((a, b) => a + b, 0) / 1000).toFixed(2)} kb`);
+		bar.end(`${processName.action.past} ${itemProcesses.length} ${itemProcesses.length === 1 ? processName.item.singular : processName.item.plural}, saving ${prettyBytes(1000/*itemProcessResults.reduce((a, b) => a + b, 0) / 1000*/)}`);
 	}
 
 	if(type === "images" && ewaConfig.images.updateReferences){
@@ -151,14 +152,14 @@ async function minify(type){
 	}
 
 	if(type === "images"){
-		global.imagePool.close();
+		//global.imagePool.close();
 	}
 
 }
 
 async function processItem(item){
 
-	const itemRelativePath = path.relative(path.join(ewaConfig.rootPath, ewaConfig.output), item.path);
+	const itemRelativePath = path.relative(ewaConfig.workPath, item.path);
 
 	try{
 
@@ -178,13 +179,14 @@ async function processItem(item){
 
 			case "files": {
 
-				const fileMapPath = path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.alias, "sourceMaps", `${originalHash}.${item.extension}.map`);
-				const fileMapRelativePath = path.relative(item.path, fileMapPath);
+				const fileMapPath = path.join(ewaConfig.workPath, ewaConfig.alias, "sourceMaps", `${originalHash}.${item.extension}.map`);
+				const fileMapRelativePath = path.relative(path.join(item.path, ".."), fileMapPath);
+				const itemFolderPathRelativeToFileMap = path.join(path.relative(path.join(fileMapPath, ".."), item.path), "..");
 
 				const cachedFilePath = path.join(ewaConfig.cachePath, "items", `${originalHash}.${item.extension}`);
 				const cachedFileMapPath = `${cachedFilePath}.map`;
 
-				if(tools.fileExists(cachedFilePath)){
+				if(fileExists(cachedFilePath)){
 					log(`Copying minified version of '${itemRelativePath}' from cache`);
 				}else{
 
@@ -197,24 +199,22 @@ async function processItem(item){
 							const minifiedHTML = htmlMinifier(
 								(await fs.readFile(item.path, "utf8")),
 								{
-									...{
-										collapseBooleanAttributes: true,
-										collapseWhitespace: true,
-										conservativeCollapse: true,
-										decodeEntities: true,
-										minifyCSS: true,
-										minifyJS: true,
-										removeAttributeQuotes: true,
-										removeComments: true,
-										removeEmptyAttributes: true,
-										removeOptionalTags: true,
-										removeRedundantAttributes: true,
-										removeScriptTypeAttributes: true,
-										removeStyleLinkTypeAttributes: true,
-										sortAttributes: true,
-										sortClassName: true,
-										useShortDoctype: true,
-									},
+									collapseBooleanAttributes: true,
+									collapseWhitespace: true,
+									conservativeCollapse: true,
+									decodeEntities: true,
+									minifyCSS: true,
+									minifyJS: true,
+									removeAttributeQuotes: true,
+									removeComments: true,
+									removeEmptyAttributes: true,
+									removeOptionalTags: true,
+									removeRedundantAttributes: true,
+									removeScriptTypeAttributes: true,
+									removeStyleLinkTypeAttributes: true,
+									sortAttributes: true,
+									sortClassName: true,
+									useShortDoctype: true,
 									...item.fileConfig.files.directOptions.html,
 								},
 							);
@@ -232,38 +232,28 @@ async function processItem(item){
 
 							const minifiedCSS = await new CleanCSS(
 								{
-									...{
-										inline: false,
-										level: {
-											1: {
-												all: true,
-											},
-											2: {
-												mergeAdjacentRules: true,
-												mergeIntoShorthands: true,
-												mergeMedia: true,
-												removeEmpty: true,
-												removeDuplicateRules: true,
-											},
+									returnPromise: true,
+									inline: false,
+									level: {
+										1: {
+											all: true,
+										},
+										2: {
+											mergeAdjacentRules: true,
+											mergeIntoShorthands: true,
+											mergeMedia: true,
+											removeEmpty: true,
+											removeDuplicateRules: true,
 										},
 									},
 									...item.fileConfig.files.directOptions.css,
-									...{sourceMap: item.fileConfig.files.addSourceMaps},
 								},
-							).minify((await fs.readFile(item.path)));
+							).minify(await fs.readFile(item.path));
 
 							await fs.writeFile(
 								cachedFilePath,
-								(item.fileConfig.files.addSourceMaps ? `${minifiedCSS.styles}\n/*# sourceMappingURL=${fileMapRelativePath} */` : minifiedCSS.styles),
+								minifiedCSS.styles,
 							);
-
-							if(item.fileConfig.files.addSourceMaps){
-								await fs.writeFile(
-									cachedFileMapPath,
-									minifiedCSS.sourceMap.toString(),
-								);
-							}
-
 
 							break;
 						}
@@ -274,10 +264,10 @@ async function processItem(item){
 							log(`Minifying '${itemRelativePath}' with terser`);
 
 							const minifiedJS = await terser(
-								(await fs.readFile(item.path, "utf8")),
+								{[path.basename(item.path)]: (await fs.readFile(item.path, "utf8"))},
 								{
 									...item.fileConfig.files.directOptions.js,
-									...{sourceMap: item.fileConfig.files.addSourceMaps ? {url: fileMapRelativePath} : false},
+									sourceMap: item.fileConfig.files.addSourceMaps ? {url: fileMapRelativePath, includeSources: true, root: itemFolderPathRelativeToFileMap} : false,
 								},
 							);
 
@@ -328,7 +318,7 @@ async function processItem(item){
 
 				await fs.copy(cachedFilePath, item.path);
 
-				if(item.fileConfig.files.addSourceMaps && tools.fileExists(cachedFileMapPath)){
+				if(item.fileConfig.files.addSourceMaps && fileExists(cachedFileMapPath)){
 					await fs.copy(cachedFileMapPath, fileMapPath);
 				}
 
@@ -354,7 +344,7 @@ async function processItem(item){
 
 						let integrity = true;
 						for(const targetExtension of targetExtensions){
-							if(!tools.fileExists(`${cachedImagePath}${targetExtension}`)) integrity = false;
+							if(!fileExists(`${cachedImagePath}${targetExtension}`)) integrity = false;
 						}
 						if(integrity){
 							log(`Copying minified version of '${itemRelativePath}' from cache`);
@@ -419,7 +409,7 @@ async function processItem(item){
 
 					}catch(error){
 
-						log("warning", `Unable to minify '${itemRelativePath}'. Enable debug to see more info.`);
+						log("warning", `Unable to minify '${itemRelativePath}'. Enable the debug interface to see more info.`);
 						log(error);
 					}
 					
@@ -442,19 +432,19 @@ async function processItem(item){
 
 async function updateImageReferences(){
 
-	for(const sheetPath of glob.sync("**/*.css", {cwd: path.join(ewaConfig.rootPath, ewaConfig.output), absolute: true})){
+	for(const sheetPath of glob.sync("**/*.css", {cwd: ewaConfig.workPath, absolute: true})){
 
 		let css = await fs.readFile(sheetPath, "utf8");
 
 		for(const imageSet of css.matchAll(/[:,\s]-?\w*-?image-set\(\s*(?<urlElement>url\(\s*["'](?<url>["']+)["']\s*\))\s*\)/gui)){
 
-			const imagePath = tools.resolveURL(
-				path.join(ewaConfig.rootPath, ewaConfig.output),
+			const imagePath = resolveURL(
+				ewaConfig.workPath,
 				sheetPath,
 				imageSet.groups.url,
 			);
 
-			if(tools.fileExists(imagePath)){
+			if(fileExists(imagePath)){
 
 				const fileConfig = config.generateForFile(imagePath);
 
@@ -490,7 +480,7 @@ async function updateImageReferences(){
 
 	}
 
-	for(const markupPath of glob.sync("**/*.html", {cwd: path.join(ewaConfig.rootPath, ewaConfig.output), absolute: true})){
+	for(const markupPath of glob.sync("**/*.html", {cwd: ewaConfig.workPath, absolute: true})){
 
 		const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
 
@@ -500,13 +490,13 @@ async function updateImageReferences(){
 
 				if(true){
 					
-					const srcPath = tools.resolveURL(
-						path.join(ewaConfig.rootPath, ewaConfig.output),
+					const srcPath = resolveURL(
+						ewaConfig.workPath,
 						markupPath,
 						img.src || "",
 					);
-					const srcsetPath = tools.resolveURL(
-						path.join(ewaConfig.rootPath, ewaConfig.output),
+					const srcsetPath = resolveURL(
+						ewaConfig.workPath,
 						markupPath,
 						img.srcset || "",
 					);
@@ -514,10 +504,10 @@ async function updateImageReferences(){
 					let imagePath;
 					let srcType;
 
-					if(tools.fileExists(srcsetPath)){
+					if(fileExists(srcsetPath)){
 						imagePath = srcsetPath;
 						srcType = "srcset";
-					}else if(tools.fileExists(srcPath)){
+					}else if(fileExists(srcPath)){
 						imagePath = srcPath;
 						srcType = "src";
 					}else{
@@ -549,13 +539,13 @@ async function updateImageReferences(){
 
 				if((/^\s*[^,\s]+$/u).test(img.srcset)){
 
-					const imagePath = tools.resolveURL(
-						path.join(ewaConfig.rootPath, ewaConfig.output),
+					const imagePath = resolveURL(
+						ewaConfig.workPath,
 						markupPath,
 						img.srcset,
 					);
 
-					if(tools.fileExists(imagePath)){
+					if(fileExists(imagePath)){
 
 						const fileConfig = config.generateForFile(imagePath);
 
@@ -598,7 +588,7 @@ function processResizeSettings(resizeConfig, imagePath){
 	if(resizeConfig.auto){
 		const autoSizes = (resizeConfig.sizes ?
 			resizeConfig.sizes.match(/(?<width>\d+)(?<unit>(?:vw|px))\s*(?:,|$)/gui).map(match => {return match.groups;}) :
-			[{width: "100", unit: "vw"}]
+			[ { width: "100", unit: "vw" } ]
 		).map(size => {
 
 			switch(size.unit.toLowerCase()){

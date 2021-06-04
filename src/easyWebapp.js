@@ -2,16 +2,16 @@
 
 /**
  * @file
- * Main function.
+ * This is the main function. It mostly just calls other functions in the correct order.
  */
 
 import path from "path";
 import fs from "fs-extra";
 
-import {log, bar, c} from "./log.js";
+import { logHeader, log, bar } from "./log.js";
 import config from "./config.js";
 import cache from "./cache.js";
-import appSource from "./appSource.js";
+import files from "./files.js";
 import serviceworker from "./serviceworker.js";
 import icons from "./icons.js";
 import minify from "./minify.js";
@@ -19,9 +19,10 @@ import minify from "./minify.js";
 
 	
 /**
- * Desc.
+ * This function is called when EWA starts.
+ * It initiates global objects and controls the overall process.
  * 
- * @param {object} callConfig - Can override some of the options found in a config file.
+ * @param	{object}	callConfig	- 
  */
 export default async function easyWebapp(callConfig = {}){
 	
@@ -38,21 +39,17 @@ export default async function easyWebapp(callConfig = {}){
 
 	global.ewaConfig = await config.generateMain(callConfig);
 
-	log("modern", ""); 
+	log("modern-only", ""); 
+	bar(.1);
 
 	await cache.ensure();
-	
-	log(`Copying source files (${path.join(ewaConfig.source)}) to '${path.join(ewaConfig.output)}'`);
-	await fs.ensureDir(path.join(ewaConfig.rootPath, ewaConfig.source));
-	await fs.emptyDir(path.join(ewaConfig.rootPath, ewaConfig.output));
-	await fs.copy(path.join(ewaConfig.rootPath, ewaConfig.source), path.join(ewaConfig.rootPath, ewaConfig.output));
-	await fs.ensureDir(path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.alias));
-	await fs.ensureDir(path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.alias, "sourceMaps"));
 
-	appSource.ensure();
+	bar(.6);
 
-	bar.end();
-	log("basic", `${c.black.bgCyan(" easy-webapp ")} Building webapp`);
+	await files.begin();
+
+	bar.hide();
+	logHeader();
 
 	await minify("remove");
 	
@@ -62,15 +59,19 @@ export default async function easyWebapp(callConfig = {}){
 
 	await serviceworker.add();
 
-	await fs.writeJson(path.join(ewaConfig.rootPath, ewaConfig.output, ewaConfig.manifest), ewaObjects.manifest);
+	await fs.writeJson(path.join(ewaConfig.workPath, ewaConfig.manifestPath), ewaObjects.manifest);
 
 	await minify("files");
 
 	bar.begin("Cooling down");
 
+	await files.end();
+
+	bar(.5);
+
 	await cache.seal();
 
-	bar.end();
-	log("modern", "");
+	bar.hide();
+	log("modern-only", "");
 
 }

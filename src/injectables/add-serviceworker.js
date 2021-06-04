@@ -1,12 +1,13 @@
 
 /**
  * @file
- * If loaded, this script registers the epwa serviceworker.
+ * If loaded, this script registers the EWA serviceworker.
  * The serviceworker will then install itself and begin to handle all network traffic on the site.
  */
 
 if("serviceWorker" in navigator && "caches" in window){
 	window.addEventListener("load", () => {
-		navigator.serviceWorker.register("epwa-serviceworker.js");	
+		const alias = "ewa"; //the alias is automatically updated to the correct value when this file is copied into the output folder
+		navigator.serviceWorker.register(`${alias}-serviceworker.js`);	
 	});
 }

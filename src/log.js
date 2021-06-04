@@ -2,41 +2,48 @@
 
 /**
  * @file
- * These functions handle most of the work relating to logging what easy-webapp is doing.
- * Since logging is used extensively in this project, some best practice has been sacrificed in order to make the functions cleaner and faster to use.
+ * These functions handle all of EWA's logging.
+ * Since logging is used extensively in this project, some best practices have been sacrificed in order to make the functions cleaner and faster to use.
  */
 
-
 import chalk from "chalk";
-export const c = new chalk.Instance();
+import logUpdate from "log-update";
 
-import Gauge from "gauge";
-import gaugeThemes from "gauge/themes.js";
-const gaugeTheme = {
-	...gaugeThemes({hasUnicode: true, hasColor: true}),
-	...{
-		preProgressbar: "",
-		postProgressbar: "",
+import files from "./files.js";
+
+const progressBar = {
+	length: 13,
+	progress: 0,
+	spinnerFrames: [ "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", "⠋" ],
+	spinnerCurrentFrame: "⠙",
+	generate: () => {
+		const completedLength = Math.round(progressBar.length * progressBar.progress);
+		return `${chalk.bgGreen(" ".repeat(completedLength))}${chalk.bgGray(" ".repeat(progressBar.length - completedLength))} ${progressBar.spinnerCurrentFrame} ${progressBar.message}`;
 	},
 };
-if(gaugeTheme.progressbarTheme.postComplete === "\x1B[0m"){
-	gaugeTheme.progressbarTheme.preComplete = "\x1B[32;42m";
-}
-const gaugeTemplate = [
-	{type: "progressbar", length: 13},
-	{type: "activityIndicator", kerning: 1, length: 1},
-	{type: "section", kerning: 1, default: ""},
-	{type: "subsection", kerning: 1, default: ""},
-];
-
-const ewaProgressBar = {};
 
 /**
- * Takes any log message and figures out if and how it should be logged.
+ * Works mostly like .padStart() and .padEnd(), but splits the padding evenly between start and end, effectively centering the text.
+ * 
+ * @param	{number}	length	- How long the final string should be.
+ * @param	{string}	padding	- The string to use as padding.
+ * 
+ * @returns {string} - The new padded string.
+ */
+String.prototype.padAround = function (length, padding){
+
+	const endLength = Math.round((length - this.length) / 2);
+	const startLength = (length - this.length) - endLength;
+
+	return `${padding.repeat(startLength)}${this}${padding.repeat(endLength)}`;
+};
+
+/**
+ * Takes any log message and figures out if/how it should be logged.
  * Any message that is logged without a defined type will default to `debug`.
  * 
- * @param	{"modern"|"basic"|"warning"|"error"|"debug"}	[type]	- What kind of message it is.
- * @param	{string}										message	- The message to log.
+ * @param	{"standard"|"debug"|"warning"|"error"|"modern-only"}	[type]	- What kind of message it is.
+ * @param	{string}												message	- The message to log.
  */
 export function log(type = "debug", message){
 
@@ -50,23 +57,25 @@ export function log(type = "debug", message){
 
 	if(type === "warning"){
 
-		console.log(`${c.black.bgYellow("   warning   ")} ${c.yellow(message)}`);
+		logUpdate.clear();
+		console.log(`${chalk.black.bgYellow("warning".padAround(progressBar.length, " "))} ${chalk.yellow(message)}`);
 
 	}else if(type === "error"){
 
 		bar.end();
-		console.log(`${c.black.bgRed("    error    ")} ${c.red(message)}`);
+		console.log(`${chalk.black.bgRed("error".padAround(progressBar.length, " "))} ${chalk.red(message)}`);
 		console.log("");
+		files.clean();
 		throw new Error(message);
 
 	}else if(ewaConfig.interface === "debug" && type === "debug"){
 
-		console.log(`${c.black.bgGrey("    debug    ")} ${message}`);
+		console.log(`${chalk.black.bgGrey("debug".padAround(progressBar.length, " "))} ${message}`);
 
 	}else if(
-		(ewaConfig.interface === "debug" && type !== "modern") ||
-		(ewaConfig.interface !== "minimal" && type === "basic") ||
-		(ewaConfig.interface === "modern" && type === "modern")
+		(ewaConfig.interface === "debug" && type !== "modern-only") ||
+		(ewaConfig.interface !== "minimal" && type === "standard") ||
+		(ewaConfig.interface === "modern" && type === "modern-only")
 	){
 
 		console.log(message);
@@ -75,69 +84,92 @@ export function log(type = "debug", message){
 
 }
 
+/**
+ * Logs the EWA header.
+ */
+export function logHeader(){
+	log("standard", `${chalk.black.bgCyan(" easy-webapp ")} Building webapp`);
+}
+
+/**
+ * Updates the ongoing progress bar with new progress/messages.
+ * 
+ * @param	{number}	progress - A decimal number between 0 and 1. Defines how close the progress is to completion.
+ * @param	{string}	[message] - Updates the status message beside the bar. If this isn't defined, the old message is kept.
+ */
 export function bar(progress, message){
 
 	if(ewaConfig.interface === "none") return;
 
-	message = message || ewaProgressBar.lastMessage;
+	progressBar.progress = progress;
 
-	if(["modern", "minimal"].includes(ewaConfig.interface)){
+	if(message){
 
-		ewaProgressBar.main.show(message, progress);
+		if(!["modern", "minimal"].includes(ewaConfig.interface) && message && message !== progressBar.message){
 
-	}else{
+			log("standard", `${" ".repeat(progressBar.length)} ${message}..`);
 
-		if(message !== ewaProgressBar.lastMessage){
-			ewaProgressBar.lastMessage = message;
-			log("basic", `              ${message}..`);
 		}
+
+		progressBar.message = message;
 
 	}
 
 }
-	
+
+/**
+ * Starts logging a progress bar to the console.
+ * The progress bar can the be updated by calling `bar()`.
+ * 
+ * @param	{string}	message	- Defines the status message to show beside the bar. 
+ */
 bar.begin = (message) => {
 
 	if(ewaConfig.interface === "none") return;
 
+	progressBar.progress = 0;
+	progressBar.message = message;
+
 	if(["modern", "minimal"].includes(ewaConfig.interface)){
 
-		ewaProgressBar.main = new Gauge({
-			template: gaugeTemplate,
-			theme: gaugeTheme,
-		});
-		ewaProgressBar.pulse = setInterval(() => {
-			ewaProgressBar.main.pulse();
+		progressBar.pulse = setInterval(() => {
+			progressBar.spinnerCurrentFrame = progressBar.spinnerFrames[(progressBar.spinnerFrames.indexOf(progressBar.spinnerCurrentFrame) + 1) % progressBar.spinnerFrames.length];
+			logUpdate(progressBar.generate());
 		}, 100);
-
-		ewaProgressBar.main.show(message, 0);
 
 	}else{
 
-		ewaProgressBar.lastMessage = message;
-		log("basic", `              ${message}..`);
+		log("standard", `${" ".repeat(progressBar.length)} ${message}..`);
 		
 	}
 
 };
 
+/**
+ * Completes the ongoing progress bar, and keeps it in the terminal with a completion message.
+ * 
+ * @param	{string}	message	- The completion message to show beside the bar.
+ */
 bar.end = (message) => {
 
 	if(ewaConfig.interface === "none") return;
 
 	bar.hide();
 	
-	if(message && ewaConfig.interface !== "minimal"){
-		log("basic", `${c.black.bgGreen("   success   ")} ${message}`);
+	if(ewaConfig.interface !== "minimal"){
+		log("standard", `${chalk.black.bgGreen("success".padAround(progressBar.length, " "))} ${message}`);
 	}
 
 };
 
+/**
+ * Completes the ongoing progress bar, and hides it as if it was never there.
+ */
 bar.hide = () => {
 
 	if(ewaConfig.interface === "none") return;
 
-	if(ewaProgressBar?.pulse) clearInterval(ewaProgressBar.pulse);
-	if(ewaProgressBar?.main) ewaProgressBar.main.hide();
+	if(progressBar.pulse) clearInterval(progressBar.pulse);
+	logUpdate.clear();
 
 };

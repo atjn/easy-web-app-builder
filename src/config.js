@@ -10,13 +10,11 @@ import minimatch from "minimatch";
 import deepmerge from "deepmerge";
 import objectHash from "object-hash";
 
-import tools from "./tools.js";
-import {log} from "./log.js";
-import {importAny} from "./compat.js";
+import { fileExists } from "./tools.js";
+import { log } from "./log.js";
+import { importAny } from "./compat.js";
 
 const cwd = process.cwd();
-
-export default {generateMain, generateForFile};
 
 
 /**
@@ -77,7 +75,7 @@ async function generateMain(callConfig){
  */
 function generateForFile(filePath){
 
-	const localFilePath = path.relative(path.join(ewaConfig.rootPath, ewaConfig.output), filePath);
+	const localFilePath = path.relative(ewaConfig.workPath, filePath);
 
 	let exceptionsConfig = {};
 
@@ -152,7 +150,7 @@ async function getRootFileConfig(folderPath, configName = "ewaconfig"){
 		path.join(folderPath, configName),
 	]){
 
-		if(tools.fileExists(filePath)){
+		if(fileExists(filePath)){
 
 			log(`Found a config file at '${path.relative(folderPath, filePath)}', attempting to read it`);
 
@@ -174,7 +172,7 @@ async function getRootFileConfig(folderPath, configName = "ewaconfig"){
  */
 function validate(config, type){
 
-	log(`Validating a ${type} config`);
+	log(`Validating ${type === "call" ? "the" : "a"} ${type} config`);
 
 	if(type === "call"){
 		return Boolean(config);
@@ -204,11 +202,11 @@ const defaults = {
 	interface: "modern",
 	useCache: true,
 
-	source: "/source",
-	output: "/public",
+	inputPath: "/source",
+	outputPath: "/public",
 
-	index: "index.html",
-	manifest: "manifest.json",
+	indexPath: "index.html",
+	manifestPath: "manifest.json",
 	
 	icons: {
 		add: true,
@@ -222,7 +220,8 @@ const defaults = {
 	},
 
 	serviceworker: {
-		add: true,
+		add: false,
+		clean: false,
 	},
 
 	files: {
@@ -237,7 +236,7 @@ const defaults = {
 		updateReferences: true,
 		keepOriginalFormat: true,
 		targetExtension: "webp",
-		targetExtensions: ["webp", "jxl"],
+		targetExtensions: [ "webp", "jxl" ],
 		resize: {
 			auto: true,
 			fallbackSize: undefined,
@@ -251,3 +250,5 @@ const defaults = {
 	fileExceptions: [],
 	
 };
+
+export default { generateMain, generateForFile };

@@ -1,6 +1,6 @@
 {
   "name": "easy-webapp",
-  "version": "1.0.0",
+  "version": "1.0.0-beta1",
   "description": "TODO",
   "exports": "./src/easyWebapp.js",
   "bin": "./bin/cli.js",
@@ -10,7 +10,7 @@
   ],
   "type": "module",
   "engines": {
-    "node": ">=14.13.0"
+    "node": "^14.13.1 || ^16.0.0"
   },
   "scripts": {
     "lint:js": "eslint \"**/*.js\"",
@@ -29,6 +29,7 @@
     "build",
     "minify",
     "icon",
+    "favicon",
     "serviceworker"
   ],
   "author": {
@@ -42,23 +43,24 @@
   },
   "homepage": "https://github.com/atjn/easy-pwa#readme",
   "dependencies": {
-    "@squoosh/api": "file:squoosh-api-0.1.0.tgz",
+    "@squoosh/lib": "0.2.3",
     "chalk": "^4.1.1",
     "chokidar": "^3.5.1",
     "clean-css": "^5.1.2",
     "deepmerge": "^4.2.2",
     "folder-hash": "^4.0.1",
     "fs-extra": "^10.0.0",
-    "gauge": "^3.0.0",
     "get-folder-size": "^3.1.0",
     "glob": "^7.1.7",
     "html-minifier-terser": "^5.1.1",
-    "inquirer": "^8.0.0",
-    "jsdom": "^16.5.3",
+    "inquirer": "^8.1.0",
+    "inquirer-file-tree-selection-prompt": "^1.0.7",
+    "jsdom": "^16.6.0",
+    "log-update": "^4.0.0",
     "minimatch": "^3.0.4",
-    "object-hash": "^2.1.1",
+    "object-hash": "^2.2.0",
+    "pretty-bytes": "^5.6.0",
     "pwa-asset-generator": "^4.1.1",
-    "squoosh-module": "^0.2.1",
     "svgo": "^2.3.0",
     "terser": "^5.7.0",
     "tiny-async-pool": "^1.2.0",
@@ -67,9 +69,9 @@
     "yargs": "^17.0.1"
   },
   "devDependencies": {
-    "@atjn/eslint-config": "^3.0.1",
-    "eslint": "^7.26.0",
-    "eslint-plugin-jsdoc": "^34.0.2",
+    "@atjn/eslint-config": "^3.2.0",
+    "eslint": "^7.27.0",
+    "eslint-plugin-jsdoc": "^35.1.2",
     "eslint-plugin-promise": "^5.1.0"
   }
 }
