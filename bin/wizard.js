@@ -235,7 +235,7 @@ export default async function (){
 			filter: answer => Boolean(answer === "Yes"),
 		},
 		{
-			name: "useStandardConfigFile",
+			name: "useDefaultConfigName",
 			type: "list",
 			prefix: p, suffix: s,
 			message: `That was all! I will save your preferences in a file called ".ewaconfig.js". Is that cool?\n  ${chalk.dim("If you choose a different name, EWA won't be able to find the file automatically.")}`,
@@ -246,7 +246,7 @@ export default async function (){
 			filter: answer => Boolean(answer === "Yes!"),
 		},
 		{
-			when: answers => !answers.useStandardConfigFile,
+			when: answers => !answers.useDefaultConfigName,
 			name: "configName",
 			type: "input",
 			prefix: p, suffix: s,
@@ -259,10 +259,7 @@ export default async function (){
 	.catch(error => handleError(error));
 
 	const configFile = `\n/**\n * @file\n * Configuration script for eay-webapp.\n */\n\nexport default ${JSON.stringify(allAnswers.config, null, 2)}\n`;
-
-	await fs.writeFile(path.join(process.cwd(), allAnswers.useStandardConfigFile ? ".ewaconfig.js" : `.${allAnswers.configName}.js`), configFile);
-
-	console.log(allAnswers);
+	await fs.writeFile(path.join(process.cwd(), allAnswers.useDefaultConfigName ? ".ewaconfig.js" : `.${allAnswers.configName}.js`), configFile);
 
 
 }
