@@ -36,9 +36,9 @@ async function generateMain(callConfig){
 	log("Merging all config sources into the main config object");
 
 	const mainConfig = deepmerge.all([
-		defaults,
-		rootFileConfig,
-		mapCall(callConfig),
+		defaults || {},
+		rootFileConfig || {},
+		mapCall(callConfig) || {},
 		{"rootPath": rootPath},
 	]);
 
@@ -138,7 +138,7 @@ function mapCall(callConfig){
  * @returns	{object}					- An array of string rules.
  * 
  */
-async function getRootFileConfig(folderPath, configName = "ewaconfig"){
+export async function getRootFileConfig(folderPath, configName = "ewaconfig"){
 
 	log(`Trying to find config file '${configName}' in project root folder`);
 
@@ -202,11 +202,10 @@ const defaults = {
 	interface: "modern",
 	useCache: true,
 
-	inputPath: "/source",
-	outputPath: "/public",
+	inputPath: "source",
+	outputPath: "public",
 
-	indexPath: "index.html",
-	manifestPath: "manifest.json",
+	manifestPath: undefined,
 	
 	icons: {
 		add: true,

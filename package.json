@@ -5,7 +5,7 @@
   "exports": "./src/easyWebapp.js",
   "bin": "./bin/cli.js",
   "files": [
-    "/bin/cli.js",
+    "/bin/*",
     "/src/*"
   ],
   "type": "module",
@@ -55,6 +55,7 @@
     "html-minifier-terser": "^5.1.1",
     "inquirer": "^8.1.0",
     "inquirer-file-tree-selection-prompt": "^1.0.7",
+    "inquirer-fuzzy-path": "^2.3.0",
     "jsdom": "^16.6.0",
     "log-update": "^4.0.0",
     "minimatch": "^3.0.4",

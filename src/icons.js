@@ -22,7 +22,6 @@ import { log, bar } from "./log.js";
 import { getExtension, getFolderFiles, fileExists, resolveURL } from "./tools.js";
 
 import PWAAssetGenerator from "pwa-asset-generator";
-import { FORMERR } from "dns";
 
 
 /**
@@ -109,7 +108,7 @@ async function add(){
 		]) ];
 
 
-		for(const markupPath of glob.sync("**/*.html", {cwd: ewaConfig.workPath, absolute: true})){
+		for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
 
 			const html = new jsdom.JSDOM(await fs.readFile(markupPath));
 
@@ -245,7 +244,7 @@ async function ensureSourceIcon(){
 		log("No source icon is defined in config, will instead find the biggest icon (in bytes) and use that as source icon.");
 
 		if(ewaConfig.icons.list.length === 0){
-			log("warning", `Was unable to find an icon to use for this webapp, falling back to a generic icon instead. Please link to one in the ${ewaConfig.indexPath}, ${ewaConfig.manifestPath}, or ${ewaConfig.configName} file.`);
+			log("warning", `Was unable to find an icon to use for this webapp, falling back to a generic icon instead. Please link to one in any HTML file, ${ewaConfig.manifestPath}, or ${ewaConfig.configName}.`);
 			await fs.copy(path.join(EWASourcePath, "./src/injectables/generic/images/logo.svg"), path.join(ewaConfig.workPath, path.join(ewaConfig.alias, "default-icon.svg")));
 			ewaConfig.icons.list.push(path.join(ewaConfig.alias, "default-icon.svg"));
 		}

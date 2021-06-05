@@ -11,6 +11,7 @@ import os from "os";
 
 import { log } from "./log.js";
 import { fileExists, resolveURL } from "./tools.js";
+import { EWASourcePath } from "./compat.js";
 
 import glob from "glob";
 import jsdom from "jsdom";
@@ -34,117 +35,173 @@ async function begin(){
 	await fs.ensureDir(path.join(ewaConfig.workPath, ewaConfig.alias));
 	await fs.ensureDir(path.join(ewaConfig.workPath, ewaConfig.alias, "sourceMaps"));
 
-	log(`Making sure main index is usable`);
+	log("Making sure HTML files are usable");
 
-	const indexPath = path.join(ewaConfig.workPath, ewaConfig.indexPath);
-
-	if(!fileExists(indexPath)){
-		log("warning", `Was unable to locate the main HTML file at ${path.join(ewaConfig.inputPath, ewaConfig.indexPath)}. Certain features will not run because of this, please fix it.`);
-		ewaConfig.serviceworker.add = false;
-		ewaConfig.images.convert = false;
-	}
-
-	const indexObject = new jsdom.JSDOM(await fs.readFile(indexPath));
-
-	if(!indexObject?.window?.document){
-
-		log("warning", `Was unable to read the main HTML file at ${path.join(ewaConfig.inputPath, ewaConfig.indexPath)}. Certain features will not run because of this, please fix it.`);
-		ewaConfig.serviceworker.add = false;
-		ewaConfig.images.convert = false;
-
-	}else if(!indexObject.window.document.head){
-
-		log(`Main HTML file is missing a <head> section, so adding one.`);
-		const head = indexObject.window.document.createElement("head");
-		indexObject.window.document.appendChild(head);
-		await fs.writeFile(indexPath, indexObject.window.document.documentElement.outerHTML);
-
-	}
-
-	log("Making sure all HTML files are usable");
-
-	for(const markupPath of glob.sync("**/*.html", {cwd: ewaConfig.workPath, absolute: true})){
-
-		if(markupPath === indexPath) continue;
+	const markupPaths = glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true});
+	let markupHeads = 0;
+	for(const markupPath of markupPaths){
 
 		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
 
 		if(!html?.window?.document){
-			log("warning", `Was unable to read the HTML file at ${path.relative(ewaConfig.workPath, markupPath)}. Please fix it.`);
+			log("warning", `The HTML file '${path.relative(ewaConfig.workPath, markupPath)}' seems to be invalid. This could cause problems later on, please fix it.`);
 		}
-
+		if(html?.window?.document?.head){
+			markupHeads++;
+		}
 	}
+	if(markupPaths.length > 0 && markupHeads === 0) log("warning", `None of the HTML files in this project have a <head>. This will cause problems later on, please fix it.`);
 
-	log(`Making sure manifest is usable`);
+	log(`Trying to find a link to the site manifest`);
 
-	const indexManifest = indexObject.window.document.head.querySelector("link[rel=manifest]");
-	let manifestPath = resolveURL(ewaConfig.workPath, indexPath, indexManifest?.href);
-	if(indexManifest && fileExists(manifestPath)){
-		log(`A reference to the manifest file was found in '${ewaConfig.indexPath}'. Overriding the config object.`);
-		log(`Since a manifest link was found in the main index file, EWA will not mess with the manifest link in other HTML files.`);
-		ewaConfig.manifestPath = indexManifest.href;
-	}else{
-		if(indexManifest) log("warning", `A reference to the manifest file was found in '${ewaConfig.indexPath}' (${path.relative(ewaConfig.workPath, manifestPath)}), but it does not seem to link to a real manifest file. Please fix this.`);
-		
-		manifestPath = path.join(ewaConfig.workPath, ewaConfig.manifestPath);
-		log(`Looking for the manifest file at ${ewaConfig.manifestPath}`);
-		if(fileExists(manifestPath)){
-			log("Found manifest file");
+	log("Looking in config");
+	if(ewaConfig.manifestPath){
+
+		if(fileExists(path.join(ewaConfig.workPath, ewaConfig.manifestPath))){
+			if(await readManifest(path.join(ewaConfig.workPath, ewaConfig.manifestPath))){
+				log(`The manifest link in config seems valid`);
+			}else{
+				ewaObjects.manifest = {};
+			}
 		}else{
-			log("warning", "No manifest found, so using generic manifest instead. You can generate a generic one by running the command 'easy-webapp scaffold manifest', and then customize it afterwards.");
-			fs.copySync(path.join(ewaConfig.rootPath, "./injectables/generic/manifest.json"), manifestPath);
+			ewaConfig.manifestPath = undefined;
+			log("warning", `The manifest path in the config file doesn't point to a file. Please fix the path or remove it.`);
 		}
 
-		for(const markupPath of glob.sync("**/*.html", {cwd: ewaConfig.workPath, absolute: true})){
+	}
 
+	if(!ewaConfig.manifestPath){
+		log("Looking in HTML files");
+
+		const possibleManifestPaths = [];
+
+		for(const markupPath of markupPaths){
 			const html = new jsdom.JSDOM(await fs.readFile(markupPath));
-
 			if(!html?.window?.document?.head) continue;
+			
+			for(const manifestLink of html.window.document.head.querySelectorAll("link[rel=manifest]")){
+				possibleManifestPaths.push(resolveURL(ewaConfig.workPath, markupPath, manifestLink.href));
+			}
+		}
 
-			log(`Adding a reference to the manifest file in ${path.relative(ewaConfig.workPath, markupPath)} (overriding any existing).`);
+		//Remove duplicates, then remove any that doesn't point to a file
+		const manifestPaths = [ ...new Set(possibleManifestPaths) ].filter(manifestPath => fileExists(manifestPath));
 
-			for(const manifestLink of html.window.document.head.querySelectorAll("link[rel=manifest]")) manifestLink.remove();
+		for(const manifestPath of manifestPaths){
+			if(await readManifest(manifestPath)){
+				log(`Found a link to a valid manifest file in an HTML file`);
+			}else{
+				if(manifestPaths.indexOf(manifestPath) + 1 === manifestPaths.length){
+					ewaObjects.manifest = {};
+					ewaConfig.manifestPath = path.relative(ewaConfig.workPath, manifestPath);
+					log("This is the last manifest file found, so keeping it despite it being invalid.");
+					break;
+				}else{
+					log("Also found other manifest files, trying to see if they are valid.");
+				}
+			}
+		}
 
-			const relativeManifestLink = path.relative(path.join(markupPath, ".."), manifestPath);
+	}
 
-			const manifestLinkElement = indexObject.window.document.createElement("link"); manifestLinkElement.rel = "manifest"; manifestLinkElement.href = relativeManifestLink;
-			indexObject.window.document.head.appendChild(manifestLinkElement);
-			await fs.writeFile(markupPath, indexObject.window.document.documentElement.outerHTML);
-
+	if(!ewaConfig.manifestPath){
+		log("Trying to guess the path");
+		
+		const possibleManifestPath = path.join(ewaConfig.workPath, "manifest.json");
+		if(fileExists(possibleManifestPath)){
+			if(await readManifest(possibleManifestPath)){
+				log(`Guessed the manifest path: ${path.relative(ewaConfig.workPath, possibleManifestPath)}`);
+			}else{
+				log(`Guessed a valid manifest path, but the file seems invalid, so won't use: ${path.relative(ewaConfig.workPath, possibleManifestPath)}`);
+			}
 		}
 	}
 
-
-	ewaObjects.manifest = await fs.readJson(path.join(ewaConfig.workPath, ewaConfig.manifestPath));
-
-
-	log("Discovering new icons");
-
-	const foundIcons = [];
-
-	for(const icon of indexObject.window.document.head.querySelectorAll("link[rel*=icon]")){
-		if(icon.href) foundIcons.push(path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, indexPath, icon.href)));
+	if(!ewaConfig.manifestPath){
+		log("warning", `No site manifest found, so using a generic one instead. You can generate one in your source folder with the command: easy-webapp scaffold "manifest"`);
+		await fs.copy(path.join(EWASourcePath, "src/injectables/generic/manifest.json"), path.join(ewaConfig.workPath, "manifest.json"));
+		await readManifest(path.join(ewaConfig.workPath, "manifest.json"));
 	}
 
+	/**
+	 * Tries to read a manifest file. If succesful, adds it to internal memory. If not, logs a warning.
+	 * 
+	 * @param	{string}	manifestPath	- Absolute path to the manifest file.
+	 *  
+	 * @returns 	{boolean}	- If the read was succesful.
+	 */
+	async function readManifest(manifestPath){
+		try{
+			ewaObjects.manifest = await fs.readJson(manifestPath);
+			ewaConfig.manifestPath = path.relative(ewaConfig.workPath, manifestPath);
+			return true;
+		}catch(error){
+			log("warning", `The manifest file '${ewaConfig.manifestPath}' seems to be invalid. This might cause problems later on, please fix it.`);
+			return false;
+		}
+	}
+
+	log("Adding links to the site manifest");
+	for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
+
+		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
+
+		if(!html?.window?.document?.head){
+			log(`${path.relative(ewaConfig.workPath, markupPath)} doesn't have a <head>, so won't add a reference to manifest.`);
+			continue;
+		}
+
+		log(`Adding a reference to the manifest file in ${path.relative(ewaConfig.workPath, markupPath)} (overriding any existing).`);
+
+		for(const manifestLink of html.window.document.head.querySelectorAll("link[rel=manifest]")) manifestLink.remove();
+
+		const relativeManifestLink = path.relative(path.join(markupPath, ".."), path.join(ewaConfig.workPath, ewaConfig.manifestPath));
+
+		const manifestLinkElement = html.window.document.createElement("link"); manifestLinkElement.rel = "manifest"; manifestLinkElement.href = relativeManifestLink;
+		html.window.document.head.appendChild(manifestLinkElement);
+		await fs.writeFile(markupPath, html.window.document.documentElement.outerHTML);
+
+	}
+
+
+
+	log("Discovering icons");
+
+	for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
+
+		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
+
+		const foundIcons = [];
+
+		for(const icon of html.window.document.head.querySelectorAll("link[rel*=icon]")){
+			if(icon.href) foundIcons.push(path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, markupPath, icon.href)));
+		}
+
+		log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons in '${path.relative(ewaConfig.workPath, markupPath)}'.${foundIcons.length > 0 ? " Adding them to the icons list." : ""}`);
+
+		ewaConfig.icons.list.push(...foundIcons);
+
+	}
+
+	const foundManifestIcons = [];
+	if(!Array.isArray(ewaObjects.manifest.icons)) ewaObjects.manifest.icons = [];
 	for(const icon of ewaObjects.manifest.icons){
-		if(icon.src) foundIcons.push(path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, manifestPath, icon.src)));
+		if(icon.src) foundManifestIcons.push(path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, ewaConfig.manifestPath, icon.src)));
 	}
+	log(`${foundManifestIcons.length > 0 ? `Found ${foundManifestIcons.length}` : "Did not find any"} references to icons in manifest.${foundManifestIcons.length > 0 ? "Adding them to the icons list." : ""}`);
+	ewaConfig.icons.list.push(...foundManifestIcons);
 
-	log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons in ${ewaConfig.indexPath} and ${ewaConfig.manifestPath}. Adding them to the icons list.`);
-
-	//Merge list of auto-found icons with manually defined list and remove duplicates
-	ewaConfig.icons.list = [ ...new Set([ ...ewaConfig.icons.list, ...foundIcons ]) ];
-
-	ewaConfig.icons.list.filter(iconPath => {
+	//Remove duplicates, then remove any icons that don't exist
+	ewaConfig.icons.list = [ ...new Set([ ...ewaConfig.icons.list ]) ].filter(iconPath => {
+	
 		if(fileExists(path.join(ewaConfig.workPath, iconPath))){
 			return true;
 		}else{
-			log("warning", `Found a reference to an icon at '${iconPath}', but was unable to find an icon at that path. Please remove any broken references to icons.`);
+			log("warning", `Found a reference to an icon at '${path.relative(ewaConfig.workPath, iconPath)}', but was unable to find an icon at that path. Please remove any broken references to icons.`);
 			return false;
 		}
-	});
 
-	await fs.writeFile(indexPath, indexObject.window.document.documentElement.outerHTML);
+	});
 
 }
 

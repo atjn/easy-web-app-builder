@@ -1,26 +1,8 @@
 {
 	
-	"short_name": "My App",
-	"name": "My Easy App",
+	"short_name": "A webapp",
+	"name": "A super easy webapp",
 	"lang": "en",
-
-	"icons": [
-		{
-			"src": "img/logo_192x192.png",
-			"type": "image/png",
-			"sizes": "192x192"
-		},
-		{
-			"src": "img/logo_512x512.png",
-			"type": "image/png",
-			"sizes": "512x512"
-		},
-		{
-			"src": "img/logo.svg",
-			"type": "image/svg+xml",
-			"sizes": "any"
-		}
-	],
 
 	"start_url": "/",
 	"display": "standalone",

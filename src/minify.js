@@ -480,7 +480,7 @@ async function updateImageReferences(){
 
 	}
 
-	for(const markupPath of glob.sync("**/*.html", {cwd: ewaConfig.workPath, absolute: true})){
+	for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
 
 		const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
 

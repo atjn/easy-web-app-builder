@@ -31,7 +31,7 @@ async function add(){
 
 		fs.copySync(path.join(EWASourcePath, "./src/injectables/remove-serviceworker.js"), path.join(ewaConfig.workPath, ewaConfig.alias, "remove-serviceworker.js"));
 
-		for(const markupPath of glob.sync("**/*.html", {cwd: ewaConfig.workPath, absolute: true})){
+		for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
 
 			const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
 
@@ -110,7 +110,7 @@ async function add(){
 
 		await fs.writeFile(path.join(ewaConfig.workPath, ewaConfig.alias, "add-serviceworker.js"), adderCode);
 
-		for(const markupPath of glob.sync("**/*.html", {cwd: ewaConfig.workPath, absolute: true})){
+		for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
 
 			const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
 
