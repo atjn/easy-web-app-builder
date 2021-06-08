@@ -1,8 +1,8 @@
 {
   "name": "easy-webapp",
   "version": "1.0.0-beta1",
-  "description": "TODO",
-  "exports": "./src/easyWebapp.js",
+  "description": "Make your website better with one command.",
+  "exports": "./src/ewa.js",
   "bin": "./bin/cli.js",
   "files": [
     "/bin/*",
@@ -15,7 +15,9 @@
   "scripts": {
     "lint:js": "eslint \"**/*.js\"",
     "lint": "npm run lint:js",
-    "test": "npm install && npm run lint"
+    "test:usability": "",
+    "test:everything": "npm install && npm run lint && npm run test:usability",
+    "test": "npm run test:everything"
   },
   "repository": {
     "type": "git",
@@ -48,14 +50,14 @@
     "chokidar": "^3.5.1",
     "clean-css": "^5.1.2",
     "deepmerge": "^4.2.2",
+    "escape-string-regexp": "^5.0.0",
     "folder-hash": "^4.0.1",
     "fs-extra": "^10.0.0",
     "get-folder-size": "^3.1.0",
     "glob": "^7.1.7",
     "html-minifier-terser": "^5.1.1",
     "inquirer": "^8.1.0",
-    "inquirer-file-tree-selection-prompt": "^1.0.7",
-    "inquirer-fuzzy-path": "^2.3.0",
+    "inquirer-file-tree-selection-prompt": "1.0.6",
     "jsdom": "^16.6.0",
     "log-update": "^4.0.0",
     "minimatch": "^3.0.4",

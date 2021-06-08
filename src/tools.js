@@ -80,6 +80,19 @@ export function getFolderFiles(folderPath){
 }
 
 /**
+ * Returns an array of all subfolder names in a folder.
+ * 
+ * @param	{string}	folderPath	- Absolute path of the folder to scan.
+ * 
+ * @returns	{string[]}	- An array of all subfolder names in the folder.
+ */
+export function getSubfolders(folderPath){
+	return fs.readdirSync(folderPath, {withFileTypes: true})
+		.filter(entry => entry.isDirectory())
+		.map(entry => entry.name);
+}
+
+/**
  * Checks if a file exists at a certain path.
  * 
  * @param	{string}	filePath	- Absolute path of the file to check.
@@ -89,6 +102,19 @@ export function getFolderFiles(folderPath){
 export function fileExists(filePath){
 
 	return Boolean(fs.existsSync(filePath) && fs.lstatSync(filePath).isFile());
+
+}
+
+/**
+ * Checks if a folder exists at a certain path.
+ * 
+ * @param	{string}	folderPath	- Absolute path of the folder to check.
+ * 
+ * @returns	{boolean}	- Wether the folder exists or not.
+ */
+export function folderExists(folderPath){
+
+	return Boolean(fs.existsSync(folderPath) && fs.lstatSync(folderPath).isDirectory());
 
 }
 

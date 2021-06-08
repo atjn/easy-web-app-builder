@@ -61,6 +61,8 @@ async function generateMain(callConfig){
 
 	mainConfig.hash = objectHash(mainConfig);
 
+	if(mainConfig.alias !== defaults.alias) log(`NOTE: The EWA alias has been changed to '${mainConfig.alias}'. If this alias collides with other names in the project, it could cause weird behavior.`);
+
 	return mainConfig;
 
 }
@@ -202,8 +204,8 @@ const defaults = {
 	interface: "modern",
 	useCache: true,
 
-	inputPath: "source",
-	outputPath: "public",
+	inputPath: undefined,
+	outputPath: undefined,
 
 	manifestPath: undefined,
 	

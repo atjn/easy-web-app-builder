@@ -3,7 +3,7 @@
 /**
  * @file
  * These functions handle all of EWA's logging.
- * Since logging is used extensively in this project, some best practices have been sacrificed in order to make the functions cleaner and faster to use.
+ * Since logging is used extensively in this project, some best practices have been sacrificed in order to make the functions faster to use.
  */
 
 import chalk from "chalk";
@@ -23,7 +23,7 @@ const progressBar = {
 };
 
 /**
- * Works mostly like .padStart() and .padEnd(), but splits the padding evenly between start and end, effectively centering the text.
+ * Works mostly like `.padStart()` and `.padEnd()`, but splits the padding evenly between start and end, effectively centering the text.
  * 
  * @param	{number}	length	- How long the final string should be.
  * @param	{string}	padding	- The string to use as padding.
@@ -39,7 +39,7 @@ String.prototype.padAround = function (length, padding){
 };
 
 /**
- * Takes any log message and figures out if/how it should be logged.
+ * Takes any log message and figures out how/if it should be logged.
  * Any message that is logged without a defined type will default to `debug`.
  * 
  * @param	{"standard"|"debug"|"warning"|"error"|"modern-only"}	[type]	- What kind of message it is.
@@ -63,8 +63,7 @@ export function log(type = "debug", message){
 	}else if(type === "error"){
 
 		bar.end();
-		console.log(`${chalk.black.bgRed("error".padAround(progressBar.length, " "))} ${chalk.red(message)}`);
-		console.log("");
+		console.log(`${chalk.black.bgRed("error".padAround(progressBar.length, " "))} ${chalk.red(message)}\n`);
 		files.clean();
 		throw new Error(message);
 
@@ -87,9 +86,9 @@ export function log(type = "debug", message){
 /**
  * Logs the EWA header.
  */
-export function logHeader(){
+log.header = () => {
 	log("standard", `${chalk.black.bgCyan(" easy-webapp ")} Building webapp`);
-}
+};
 
 /**
  * Updates the ongoing progress bar with new progress/messages.

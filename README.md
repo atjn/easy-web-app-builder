@@ -1,13 +1,20 @@
 # Easy-WebApp
-Easy-WebApp (EWA) takes all the boring parts of making a website/webapp, and automates them for you. You can feed EWA your website code, and it will:
-- Generate icons in all necessary sizes and formats, and link to them in your index and manifest files.
+Easy-WebApp (EWA) automates all the boring stuff you need to do when publishing a webapp. It will:
+
+- Generate icons in all necessary sizes and link to them in your html and manifest files.
 - Generate a serviceworker, allowing your site to run as a standalone app.
-- Minify all HTML, CSS and JS files.
-- Compress all images.
+- Minify your files.
+- Compress your images.
 
-..and it will do all of this after just a few minutes of setup. If you want, you can spend hours customizing exactly how EWA should operate, but it is designed to automatically adapt to your website and use best practices wherever possible - out of the box!
+..and it will do all this with no configuration!
 
-## How to install and use
+## Motivation
+Doing the same repetitive work for every release of a webapp (or any project) has always been a nuisance for developers, which is why we now have many excellent build systems that can do the work for us. These build systems are often very modular, which means they can do anything you could ever want them to, but that modularity also comes at a cost. It can take forever to find the correct modules, understand how to use them, and set them up just right to get everything working, and because of that long setup time, many developers just don't bother with any of it.
+
+EWA is designed to solve this problem. It isn't modular, it can't do every single crazy idea you have in mind, but it will do most of the stuff most people need, and it will do it with no setup _at all_. It is very adaptable and will apply best-practices wherever it can without requiring the developer to even know what is going on.
+At the same time, EWA doesn't block the developer from making improvements to the process. Most of the stuff EWA does is very configurable, and if that isn't enough, certain parts of EWA can be turned off and handed over to a more complicated build system, while EWA takes care of all the other stuff the developer doesn't want to touch.
+
+## How to use
 EWA is a Node module. If you don't know what that means, you should start by checking out one of the great tutorials online, such as [nodejs.dev](https://nodejs.dev/learn/introduction-to-nodejs).
 
 When you have Node installed, you can install EWA in your project with the following command:

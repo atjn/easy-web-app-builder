@@ -1,8 +1,7 @@
 
-
 /**
  * @file
- * This enables Eslint linting of all javascript files.
+ * This enables ESlint linting of all javascript files.
  */
 
 module.exports = {

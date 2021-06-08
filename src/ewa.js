@@ -2,13 +2,13 @@
 
 /**
  * @file
- * This is the main function. It mostly just calls other functions in the correct order.
+ * This is the main file/function for the entire package. It mostly just calls other functions in the correct order.
  */
 
 import path from "path";
 import fs from "fs-extra";
 
-import { logHeader, log, bar } from "./log.js";
+import { log, bar } from "./log.js";
 import config from "./config.js";
 import cache from "./cache.js";
 import files from "./files.js";
@@ -24,10 +24,10 @@ import minify from "./minify.js";
  * 
  * @param	{object}	callConfig	- 
  */
-export default async function easyWebapp(callConfig = {}){
+export default async function (callConfig = {}){
 	
 	global.ewaConfig = {
-		//Temporary interface config necessary in order to run logging, this will be overridden when main config is generated
+		//Temporary interface config necessary in order to run logging. This will be overwritten when main config is generated
 		interface: callConfig.interface ? callConfig.interface : "modern",
 	};
 
@@ -35,11 +35,10 @@ export default async function easyWebapp(callConfig = {}){
 		minifiedHashes: [],
 	};
 
-	bar.begin(`Warming up`);
-
 	global.ewaConfig = await config.generateMain(callConfig);
 
 	log("modern-only", ""); 
+	bar.begin(`Warming up`);
 	bar(.1);
 
 	await cache.ensure();
@@ -49,7 +48,7 @@ export default async function easyWebapp(callConfig = {}){
 	await files.begin();
 
 	bar.hide();
-	logHeader();
+	log.header();
 
 	await minify("remove");
 	
@@ -62,6 +61,7 @@ export default async function easyWebapp(callConfig = {}){
 	await fs.writeJson(path.join(ewaConfig.workPath, ewaConfig.manifestPath), ewaObjects.manifest);
 
 	await minify("files");
+
 
 	bar.begin("Cooling down");
 

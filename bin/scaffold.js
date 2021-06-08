@@ -9,7 +9,7 @@ import { getRootFileConfig } from "../src/config.js";
 export default async function (type, inputPath){
 
 	if(!inputPath){
-		const rootConfig = getRootFileConfig(process.cwd);
+		const rootConfig = await getRootFileConfig(process.cwd);
 		inputPath = rootConfig.inputPath;
 	}
 

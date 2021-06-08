@@ -6,11 +6,9 @@
 
 import inquirer from "inquirer";
 import fileTree from "inquirer-file-tree-selection-prompt";
-import fuzzyPath from "inquirer-fuzzy-path";
 
 const prompt = inquirer.createPromptModule();
 prompt.registerPrompt("file-tree", fileTree);
-prompt.registerPrompt("fuzzy-path", fuzzyPath);
 
 import chalk from "chalk";
 import glob from "glob";
@@ -50,17 +48,10 @@ export default async function (){
 		{
 			when: answers => answers.cleanSetup,
 			name: "config.inputPath",
-			type: "fuzzy-path",
-			itemType: "directory",
-			rootPath: ".",
-			excludePath: path => path.startsWith("node_modules"),
-			excludeFilter: path => path.startsWith("."),
-			suggestOnly: true,
-			depthLimit: 10,
+			type: "input",
 			prefix: p, suffix: s,
-			message: `Which folder should we put the source files in?\n  ${chalk.dim("You can choose an existing folder or write out the name of a new one to be created.")}`,
-			default: "public",
-			validate: async answer => validateFuzzyPath(answer),
+			message: `Which folder should we put the source files in?\n  ${chalk.dim("If you choose a folder that already exists, it will be overwritten.")}`,
+			default: "source",
 			filter: answer => normalizeOutputPaths(answer),
 		},
 		{
@@ -76,17 +67,10 @@ export default async function (){
 		},
 		{
 			name: "config.outputPath",
-			type: "fuzzy-path",
-			itemType: "directory",
-			rootPath: ".",
-			excludePath: path => path.startsWith("node_modules"),
-			excludeFilter: path => path.startsWith("."),
-			suggestOnly: true,
-			depthLimit: 10,
+			type: "input",
 			prefix: p, suffix: s,
-			message: `When EWA is done, it needs a folder to save the completed files in. What should we call it?\n  ${chalk.dim("If a folder already exists at that path, it will be overwritten.")}`,
+			message: `When EWA is done, it needs a folder to save the completed files in. What should we call it?\n  ${chalk.dim("If a folder already exists at the path you choose, it will be overwritten.")}`,
 			default: "public",
-			validate: async answer => validateFuzzyPath(answer),
 			filter: answer => normalizeOutputPaths(answer),
 		},
 		{
