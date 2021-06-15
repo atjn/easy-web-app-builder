@@ -50,7 +50,13 @@ async function generateMain(callConfig){
 			},
 		},
 		{
-			glob: `**/@(${mainConfig.alias}-serviceworker.js|workbox-*.js)`,
+			glob: `${mainConfig.alias}/**/*)`,
+			files: {
+				addSourceMaps: mainConfig.serviceworker.debug,
+			},
+		},
+		{
+			glob: `**/@(${mainConfig.alias}-serviceworker.js)`,
 			files: {
 				minify: false,
 			},
@@ -221,8 +227,16 @@ const defaults = {
 	},
 
 	serviceworker: {
-		add: false,
+		add: true,
 		clean: false,
+		experience: "online",
+		debug: false,
+		networkTimeoutSeconds: 4,
+		displayUpdateButton: true,
+		displayOfflineBanner: true,
+		customRules: [
+
+		],
 	},
 
 	files: {
@@ -235,7 +249,7 @@ const defaults = {
 		minify: true,
 		convert: true,
 		updateReferences: true,
-		keepOriginalFormat: true,
+		keepOriginalFile: true,
 		targetExtension: "webp",
 		targetExtensions: [ "webp", "jxl" ],
 		resize: {

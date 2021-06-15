@@ -118,9 +118,7 @@ async function cleanUnusedFiles(){
 
 	for(const itemPath of getFolderFiles(path.join(ewaConfig.cachePath, "/items"))){
 
-		const itemName = path.parse(itemPath).name.split(".")[0];
-
-		if(!ewaObjects.minifiedHashes.includes(itemName)){
+		if(!ewaObjects.minifiedHashes.reduce((used, hash) => Boolean(itemPath.includes(hash) ? true : used))){
 			log(`Removing minified item '${itemPath}' from cache, as it is no longer used`);
 			cacheRemovals.push(
 				fs.remove(path.join(ewaConfig.cachePath, "/items", itemPath)),

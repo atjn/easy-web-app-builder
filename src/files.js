@@ -85,7 +85,7 @@ async function begin(){
 		}
 
 		if(matches.length > 1){
-			log("warning", `Not sure which folder to use as input. Using '${matches[0].name}' out of the following options: ${matches.map(match => match.name).join(", ")}.`);
+			log("warning", `Not sure which folder to use as input. Using '${matches[0].name}' from the following options: ${matches.map(match => match.name).join(", ")}.`);
 		}else{
 			log(`Decided to use '${matches[0].name}' as input folder`);
 		}
@@ -98,31 +98,7 @@ async function begin(){
 
 		log(`No output folder path is set, will try to call it something that matches the name of the input folder.`);
 
-		let name = "public";
-
-		const inputMatch = matchInputFolderName(ewaConfig.inputPath);
-
-		const typeMap = {
-			"input":	"output",
-			"Input":	"Output",
-			"INPUT":	"OUTPUT",
-			"in":		"out",
-			"In":		"Out",
-			"IN":		"OUT",
-			"source":	"public",
-			"Source":	"Public",
-			"SOURCE":	"PUBLIC",
-			"src":		"pub",
-			"Src":		"Pub",
-			"SRC":		"PUB",
-		};
-		name = typeMap[inputMatch.type] || typeMap[inputMatch.type.toLowerCase()] || name;
-
-		if(inputMatch.brand) name = `${inputMatch.brand}${inputMatch.delimiter || ""}${name}`;
-
-		log(`Decided to call it '${name}'.`);
-
-
+		const name = decideOutputFolderName(ewaConfig.inputPath);
 		const candidatePath = path.join(ewaConfig.rootPath, name);
 
 		if(fileExists(candidatePath)){
@@ -257,7 +233,7 @@ async function begin(){
 
 	if(!ewaConfig.manifestPath){
 		log("warning", `No site manifest found, so using a generic one instead. You can generate one in your source folder with the command: easy-webapp scaffold "manifest"`);
-		await fs.copy(path.join(EWASourcePath, "src/injectables/generic/manifest.json"), path.join(ewaConfig.workPath, "manifest.json"));
+		await fs.copy(path.join(EWASourcePath, "lib/scaffolding/manifest.json"), path.join(ewaConfig.workPath, "manifest.json"));
 		await readManifest(path.join(ewaConfig.workPath, "manifest.json"));
 	}
 
@@ -303,7 +279,16 @@ async function begin(){
 
 
 
-	log("Discovering icons");
+	log("Discovering and verifying icons");
+
+	ewaConfig.icons.list = ewaConfig.icons.list.filter(iconPath => {
+		if(fileExists(path.join(ewaConfig.workPath, iconPath))){
+			return true;
+		}else{
+			log("warning", `Found a reference to an icon '${iconPath}' in the config, but was unable to find an icon at that path. Please remove any broken references to icons.`);
+			return false;
+		}
+	});
 
 	for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
 
@@ -312,7 +297,14 @@ async function begin(){
 		const foundIcons = [];
 
 		for(const icon of html.window.document.head.querySelectorAll("link[rel*=icon]")){
-			if(icon.href) foundIcons.push(path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, markupPath, icon.href)));
+			if(icon.href){
+				const iconPath = path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, markupPath, icon.href));
+				if(fileExists(path.join(ewaConfig.workPath, iconPath))){
+					foundIcons.push(iconPath);
+				}else{
+					log("warning", `Found a reference to an icon '${iconPath}' in '${path.relative(ewaConfig.workPath, markupPath)}', but was unable to find an icon at that path. Please remove any broken references to icons.`);
+				}
+			}
 		}
 
 		log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons in '${path.relative(ewaConfig.workPath, markupPath)}'.${foundIcons.length > 0 ? " Adding them to the icons list." : ""}`);
@@ -324,22 +316,20 @@ async function begin(){
 	const foundManifestIcons = [];
 	if(!Array.isArray(ewaObjects.manifest.icons)) ewaObjects.manifest.icons = [];
 	for(const icon of ewaObjects.manifest.icons){
-		if(icon.src) foundManifestIcons.push(path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, ewaConfig.manifestPath, icon.src)));
+		if(icon.src){
+			const iconPath = path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, path.join(ewaConfig.workPath, ewaConfig.manifestPath), icon.src));
+			if(fileExists(path.join(ewaConfig.workPath, iconPath))){
+				foundManifestIcons.push(iconPath);
+			}else{
+				log("warning", `Found a reference to an icon '${iconPath}' in the manifest, but was unable to find an icon at that path. Please remove any broken references to icons.`);
+			}
+		}
 	}
-	log(`${foundManifestIcons.length > 0 ? `Found ${foundManifestIcons.length}` : "Did not find any"} references to icons in manifest.${foundManifestIcons.length > 0 ? "Adding them to the icons list." : ""}`);
+	log(`${foundManifestIcons.length > 0 ? `Found ${foundManifestIcons.length}` : "Did not find any"} references to icons in manifest.${foundManifestIcons.length > 0 ? " Adding them to the icons list." : ""}`);
 	ewaConfig.icons.list.push(...foundManifestIcons);
 
-	//Remove duplicates, then remove any icons that don't exist
-	ewaConfig.icons.list = [ ...new Set([ ...ewaConfig.icons.list ]) ].filter(iconPath => {
-	
-		if(fileExists(path.join(ewaConfig.workPath, iconPath))){
-			return true;
-		}else{
-			log("warning", `Found a reference to an icon at '${path.relative(ewaConfig.workPath, iconPath)}', but was unable to find an icon at that path. Please remove any broken references to icons.`);
-			return false;
-		}
-
-	});
+	//Remove duplicates
+	ewaConfig.icons.list = [ ...new Set([ ...ewaConfig.icons.list ]) ];
 
 }
 
@@ -382,6 +372,35 @@ export function findInputFolderCandidates(rootPath){
 
 }
 
+export function decideOutputFolderName(inputFolderName){
+
+	let name = "public";
+
+	const inputMatch = matchInputFolderName(inputFolderName);
+
+	if(inputMatch?.type){
+		const typeMap = {
+			"input":	"output",
+			"Input":	"Output",
+			"INPUT":	"OUTPUT",
+			"in":		"out",
+			"In":		"Out",
+			"IN":		"OUT",
+			"source":	"public",
+			"Source":	"Public",
+			"SOURCE":	"PUBLIC",
+			"src":		"pub",
+			"Src":		"Pub",
+			"SRC":		"PUB",
+		};
+		name = typeMap[inputMatch.type] || typeMap[inputMatch.type.toLowerCase()] || name;
+	}
+
+	if(inputMatch?.brand) name = `${inputMatch.brand}${inputMatch.delimiter || ""}${name}`;
+
+	return name;
+}
+
 /**
  * Identifies different parts of the input folder name, and returns them as an object.
  * 
@@ -395,7 +414,7 @@ export function findInputFolderCandidates(rootPath){
  * 
  * @returns	{object}	- The match object described above.
  */
-function matchInputFolderName(name){
+function matchInputFolderName(name = ""){
 
 	const regex = new RegExp(`^(?<name>.?(?:(?<brand>${escapeStringRegexp(ewaConfig.alias)}|easy.?webapp))?(?<delimiter>.?)(?<type>input|in|source|src))$`, "ui");
 

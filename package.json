@@ -6,6 +6,7 @@
   "bin": "./bin/cli.js",
   "files": [
     "/bin/*",
+    "/lib/*",
     "/src/*"
   ],
   "type": "module",
@@ -45,7 +46,7 @@
   },
   "homepage": "https://github.com/atjn/easy-pwa#readme",
   "dependencies": {
-    "@squoosh/lib": "0.2.3",
+    "@squoosh/lib": "file:../squoosh-official/libsquoosh/squoosh-lib-0.2.3.tgz",
     "chalk": "^4.1.1",
     "chokidar": "^3.5.1",
     "clean-css": "^5.1.2",
@@ -57,7 +58,8 @@
     "glob": "^7.1.7",
     "html-minifier-terser": "^5.1.1",
     "inquirer": "^8.1.0",
-    "inquirer-file-tree-selection-prompt": "1.0.6",
+    "inquirer-file-tree-selection-prompt": "1.0.7",
+    "joi": "^17.4.0",
     "jsdom": "^16.6.0",
     "log-update": "^4.0.0",
     "minimatch": "^3.0.4",
@@ -73,8 +75,8 @@
   },
   "devDependencies": {
     "@atjn/eslint-config": "^3.2.0",
-    "eslint": "^7.27.0",
-    "eslint-plugin-jsdoc": "^35.1.2",
+    "eslint": "^7.28.0",
+    "eslint-plugin-jsdoc": "^35.2.0",
     "eslint-plugin-promise": "^5.1.0"
   }
 }

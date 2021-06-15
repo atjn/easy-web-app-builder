@@ -56,11 +56,13 @@ export default async function (callConfig = {}){
 
 	await minify("images");
 
-	await serviceworker.add();
+	await serviceworker.link();
 
 	await fs.writeJson(path.join(ewaConfig.workPath, ewaConfig.manifestPath), ewaObjects.manifest);
 
 	await minify("files");
+
+	await serviceworker.add();
 
 
 	bar.begin("Cooling down");

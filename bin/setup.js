@@ -18,9 +18,10 @@ import path from "path";
 import fs from "fs-extra";
 
 import { fileExists } from "../src/tools.js";
+import { findInputFolderCandidates, decideOutputFolderName } from "../src/files.js";
 import scaffold from "./scaffold.js";
 
-export default async function (){
+export default async function (args){
 
 	const p = "\n \n→";
 	const s = "\n";
@@ -30,6 +31,15 @@ export default async function (){
 	console.log(chalk.dim("This wizard covers everything a normal user needs. For advanced stuff, check this out: https://github.com/atjn/easy-webapp#advanced"));
 	console.log("");
 	console.log(chalk.yellow(`NOTE: Some of these operations ${chalk.underline("will overwrite files")} in your project. Make sure to back up anything important first.`));
+
+	//Certain parts of ewaCOnfig must be defined in order to run some of EWAs functions:
+	global.ewaConfig = {
+		interface: "none",
+		alias: args.alias,
+		rootPath: args.rootPath || process.cwd(),
+	};
+
+	const inputFolderCandidates = findInputFolderCandidates(global.ewaConfig.rootPath);
 
 	let allAnswers = {};
 
@@ -55,26 +65,72 @@ export default async function (){
 			filter: answer => normalizeOutputPaths(answer),
 		},
 		{
-			when: answers => !answers.cleanSetup,
+			when: answers => Boolean(!answers.cleanSetup && inputFolderCandidates.length === 1),
+			name: "config.inputPath",
+			type: "list",
+			prefix: p, suffix: s,
+			message: `EWA thinks that the source files for your website are in the folder called '${inputFolderCandidates[0].name}'. Is that correct?`,
+			choices: [
+				"Yes!",
+				"No",
+			],
+			filter: answer => {
+				if(answer === "Yes!"){
+					allAnswers.inputFolderCandidateIsValid = true;
+					allAnswers.inputPath = inputFolderCandidates[0].name;
+				}
+				return undefined;
+			},
+		},
+		{
+			when: answers => Boolean(!answers.cleanSetup && !allAnswers.inputFolderCandidateIsValid),
 			name: "config.inputPath",
 			type: "file-tree",
 			onlyShowDir: true,
 			onlyShowValid: true,
 			prefix: p, suffix: s,
-			message: `The source files for your website need to be in a folder somewhere. Which one is that?\n  ${chalk.dim("If you haven't made the folder yet, stop the wizard and do that first, then try again.")}`,
+			message: `${inputFolderCandidates.length === 1 ? "Alright no problem, which one is it then?" : "The source files for your website should be in a folder somewhere. Which one is that?"}\n  ${chalk.dim("If you haven't made the folder yet, stop this guide and do that first, then try again.")}`,
 			validate: async path => Boolean(path !== process.cwd()),
 			filter: answer => normalizeOutputPaths(answer),
 		},
+	])
+	.then(answers => allAnswers = deepmerge(allAnswers, answers))
+	.catch(error => handleError(error));
+
+	global.ewaConfig.inputPath = allAnswers.inputPath;
+
+	const outputFolderName = decideOutputFolderName(allAnswers.inputPath);
+
+	await prompt([
 		{
+			name: "config.outputPath",
+			type: "list",
+			prefix: p, suffix: s,
+			message: `When EWA is done, it needs a folder to save the completed webapp in. It wants to call that folder '${outputFolderName}', is that cool?\n  ${chalk.dim(fs.pathExists(path.join(global.ewaConfig.rootPath, outputFolderName)) ? "A folder already exists at this path. It will be overwritten." : "There is no folder at this path right now, so there's no risk something wil be overwritten.")}`,
+			choices: [
+				"Yes!",
+				"No, I want to call it something else",
+			],
+			filter: answer => {
+				if(answer === "Yes!") allAnswers.outputFolderNameIsCool = true;
+				return undefined;
+			},
+		},
+		{
+			when: () => !allAnswers.outputFolderNameIsCool,
 			name: "config.outputPath",
 			type: "input",
 			prefix: p, suffix: s,
-			message: `When EWA is done, it needs a folder to save the completed files in. What should we call it?\n  ${chalk.dim("If a folder already exists at the path you choose, it will be overwritten.")}`,
+			message: `Alright, then what should we call it?\n  ${chalk.dim("If a folder already exists at the path you choose, it will be overwritten.")}`,
 			default: "public",
-			filter: answer => normalizeOutputPaths(answer),
+			filter: rawPath => {
+				const normalizedPath = normalizeOutputPaths(rawPath);
+				allAnswers.inputPath = normalizedPath;
+				return normalizedPath;
+			},
 		},
 		{
-			when: answers => Boolean(glob.sync("**/*.{html,htm}", {cwd: path.join(process.cwd(), answers.config.inputPath), absolute: true}).length === 0),
+			when: () => Boolean(glob.sync("**/*.{html,htm}", {cwd: path.join(process.cwd(), allAnswers.inputPath), absolute: true}).length === 0),
 			name: "addScaffolding",
 			type: "list",
 			prefix: p, suffix: s,
@@ -101,7 +157,7 @@ export default async function (){
 
 	allAnswers.config.fileExceptions = allAnswers.config.fileExceptions || [];
 
-	const absoluteInputPath = path.join(process.cwd(), allAnswers.config.inputPath);
+	const absoluteInputPath = path.join(process.cwd(), allAnswers.inputPath);
 	if(allAnswers.cleanSetup){
 
 		await fs.emptyDir(absoluteInputPath);
@@ -125,7 +181,7 @@ export default async function (){
 		{
 			when: () => {
 				const foundEnds = [];
-				for(const filePath of glob.sync("**/*[-_.]{dev.*,dev,src.*,src,source.*,source}", {cwd: path.join(process.cwd(), allAnswers.config.inputPath), absolute: true})){
+				for(const filePath of glob.sync("**/*[-_.]{dev.*,dev,src.*,src,source.*,source}", {cwd: path.join(process.cwd(), allAnswers.inputPath), absolute: true})){
 					const fileEnd = filePath.match(/(?<fileEnd>[-_.](?:dev|src|source)(?:\..*|$))/ui).groups.fileEnd;
 					if(!foundEnds.includes(fileEnd)) foundEnds.push(fileEnd);
 				}
@@ -156,7 +212,7 @@ export default async function (){
 		{
 			when: () => {
 				const foundExtensions = [];
-				for(const filePath of glob.sync("**/*{.pcss,.scss,.less,.ts,.tsx,config,rc}", {cwd: path.join(process.cwd(), allAnswers.config.inputPath), absolute: true})){
+				for(const filePath of glob.sync("**/*{.pcss,.scss,.less,.ts,.tsx,config,rc}", {cwd: path.join(process.cwd(), allAnswers.inputPath), absolute: true})){
 					const extension = path.extname(filePath);
 					if(!foundExtensions.includes(extension)) foundExtensions.push(extension);
 				}
@@ -256,10 +312,6 @@ function handleError(error){
 		console.error(error);
 	}
 };
-
-function validateFuzzyPath(answer){
-	return answer ? true : "Please write a folder path to use. You can choose one from the list by pressing 'tab'";
-}
 
 function normalizeOutputPaths(outputPath){
 	return path.isAbsolute(outputPath) ? path.relative(process.cwd(), outputPath) : outputPath;

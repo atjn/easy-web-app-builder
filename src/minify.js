@@ -16,13 +16,11 @@ import { log, bar } from "./log.js";
 import { fileExists, getExtension, resolveURL } from "./tools.js";
 import config from "./config.js";
 
-//import imageSize from "image-size";
-
 import jsdom from "jsdom";
 
 
 
-//import { ImagePool } from "@squoosh/lib";
+import { ImagePool } from "@squoosh/lib";
 
 import os from "os";
 
@@ -88,8 +86,7 @@ async function minify(type){
 
 	bar.begin(`${processName.action.present} ${processName.item.plural}`);
 
-	//global.imagePool = type === "images" ? new ImagePool() : undefined;
-	global.ImagePool = {};
+	global.imagePool = type === "images" ? new ImagePool() : undefined;
 
 	const itemProcesses = [];
 	const itemProcessResults = [];
@@ -142,7 +139,7 @@ async function minify(type){
 	if(itemProcesses.length === 0){
 		bar.hide();
 	}else{
-		bar.end(`${processName.action.past} ${itemProcesses.length} ${itemProcesses.length === 1 ? processName.item.singular : processName.item.plural}, saving ${prettyBytes(1000/*itemProcessResults.reduce((a, b) => a + b, 0) / 1000*/)}`);
+		bar.end(`${processName.action.past} ${itemProcesses.length} ${itemProcesses.length === 1 ? processName.item.singular : processName.item.plural}, saving ${prettyBytes(itemProcessResults.reduce((a, b) => a + b, 0) / 1000)}`);
 	}
 
 	if(type === "images" && ewaConfig.images.updateReferences){
@@ -152,7 +149,7 @@ async function minify(type){
 	}
 
 	if(type === "images"){
-		//global.imagePool.close();
+		global.imagePool.close();
 	}
 
 }
@@ -165,6 +162,8 @@ async function processItem(item){
 
 		const originalSize = await getItemSize.loose(item.path);
 		const originalHash = (await folderHash(item.path, { "encoding": "hex" })).hash;
+
+		ewaObjects.minifiedHashes.push(originalHash);
 
 		switch(item.type){
 
@@ -322,15 +321,17 @@ async function processItem(item){
 					await fs.copy(cachedFileMapPath, fileMapPath);
 				}
 
-				ewaObjects.minifiedHashes.push(originalHash);
-
 				return originalSize - fs.statSync(item.path).size;
 			
 			}
 
 			case "images": {
 
-				//item.fileConfig.images.resize = processResizeSettings(item.fileConfig.images.resize, item.path);
+				const image = global.imagePool.ingestImage(item.path);
+
+				await image.decoded;
+
+				item.fileConfig.images.resize = processResizeSettings(item.fileConfig.images.resize, {width: (await image.decoded).bitmap.width, height: (await image.decoded).bitmap.height});
 
 				const targetExtensions = [ ...new Set([ ...item.fileConfig.images.targetExtensions, item.fileConfig.images.targetExtension ]) ];
 
@@ -339,20 +340,20 @@ async function processItem(item){
 
 					try{
 
-						const cachedImagePath = path.join(ewaConfig.cachePath, "items", `${originalHash}-${size.width}w.`);
-						const newImagePath = item.path.replace(/\.\w+$/u, `-${size.width}w$&`).replace(/\.\w+$/u, ".");
+						const cachedImagePath = path.join(ewaConfig.cachePath, "items", `${originalHash}-${size.width}w`);
+						const newImagePath = (ewaConfig.images.preserveOriginalFile && size.width === (await image.decoded).bitmap.width) ?
+							item.path :
+							item.path.replace(/\.\w+$/u, `-${size.width}w$&`).replace(/\.\w+$/u, ".");
 
 						let integrity = true;
 						for(const targetExtension of targetExtensions){
-							if(!fileExists(`${cachedImagePath}${targetExtension}`)) integrity = false;
+							if(!fileExists(`${cachedImagePath}.${targetExtension}`)) integrity = false;
 						}
 						if(integrity){
-							log(`Copying minified version of '${itemRelativePath}' from cache`);
+							log(`Copying minified version${targetExtensions.length > 1 ? "s" : ""} of '${itemRelativePath}' from cache`);
 						}else{
-
-							const image = await global.imagePool.ingestImage(item.path);
-
-							await image.manipulate(
+							
+							await image.preprocess(
 								{
 									resize: {
 										enabled: true,
@@ -384,20 +385,21 @@ async function processItem(item){
 									default:
 										throw new Error(`Does not support minifying to image with extension "${targetExtension}"`);
 								}
-								log(`Minifying '${itemRelativePath}' to a ${size.width}x${size.height} .${targetExtension} image`);
+								log(`Minifying '${itemRelativePath}' to a ${size.width}x${size.height} ${targetExtension} image`);
 
-								options[engine] = "auto";
+								options[engine] = {};
 
 							}
 
 							await image.encode(options);
 							
-							await Promise.all(targetExtensions.map(targetExtension => {
-								const minifiedImage = image.encodedAs[targetExtension];
+							await Promise.all([ ...Object.values(image.encodedWith) ].map(async encodedImage => {
+								/*
 								if(!minifiedImage){
 									throw new Error(`Unexpected error while minifying to "${targetExtension}"`);
 								}
-								return fs.writeFile(`${cachedImagePath}.${targetExtension}`, minifiedImage);
+								*/
+								return await fs.writeFile(`${cachedImagePath}.${(await encodedImage).extension}`, (await encodedImage).binary);
 							}));
 
 						
@@ -409,8 +411,9 @@ async function processItem(item){
 
 					}catch(error){
 
-						log("warning", `Unable to minify '${itemRelativePath}'. Enable the debug interface to see more info.`);
-						log(error);
+						log("warning", `Unable to minify '${itemRelativePath}'.${ewaConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
+
+						log(`Squoosh error: ${error}`);
 					}
 					
 				}
@@ -421,12 +424,16 @@ async function processItem(item){
 
 	}catch(error){
 
-		log("warning", `Unable to minify '${itemRelativePath}'. Enable debug to see more info.`);
-		log(error);
+		if(error.includes("has an unsupported format")){
+			log("warning", `Was not able to read '${itemRelativePath}', it will not be minified.`);
+		}else{
+			log("warning", `Unable to minify '${itemRelativePath}'.${ewaConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
+		}
+		log(`Squoosh error: ${error}`);
 
 	}
 
-	return;
+	return 0;
 
 }
 
@@ -578,16 +585,18 @@ async function updateImageReferences(){
 
 }
 
-function processResizeSettings(resizeConfig, imagePath){
+function processResizeSettings(resizeConfig, originalSize){
 
-	const originalSize = null; //imageSize(imagePath);
 	resizeConfig.resizeTo = [];
 
-	resizeConfig.fallbackSize = resizeConfig.fallbackSize || Math.max( Math.min(originalSize.width, resizeConfig.maxSize, 1920), Math.min(originalSize.height, resizeConfig.maxSize, 1920) );
+	if(!resizeConfig.fallbackSize){
+		resizeConfig.fallbackSize = Math.max( Math.min(originalSize.width, resizeConfig.maxSize, 1920), Math.min(originalSize.height, resizeConfig.maxSize, 1920) );
+		//log(`No fallback size set in config, so decided that ${resizeConfig.fallbackSize} pixels was reasonable.`);
+	}
 
 	if(resizeConfig.auto){
 		const autoSizes = (resizeConfig.sizes ?
-			resizeConfig.sizes.match(/(?<width>\d+)(?<unit>(?:vw|px))\s*(?:,|$)/gui).map(match => {return match.groups;}) :
+			resizeConfig.sizes.match(/(?<width>\d+)(?<unit>(?:vw|px))\s*(?:,|$)/gui).map(match => match.groups) :
 			[ { width: "100", unit: "vw" } ]
 		).map(size => {
 
@@ -646,8 +655,10 @@ function processResizeSettings(resizeConfig, imagePath){
 		});
 		largerIndex++;
 	}
+
+	if(ewaConfig.images.preserveOriginalFile) resizeConfig.customSizes.push(originalSize);
 	
-	resizeConfig.resizeTo = [ ...resizeConfig.resizeTo, ...resizeConfig.customSizes ].sort((a, b) => {return a.width - b.width;});
+	resizeConfig.resizeTo = [ ...new Set([ ...resizeConfig.resizeTo, ...resizeConfig.customSizes ]) ].sort((a, b) => {return a.width - b.width;});
 
 	return resizeConfig;
 	

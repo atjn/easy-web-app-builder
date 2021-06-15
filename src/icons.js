@@ -245,7 +245,7 @@ async function ensureSourceIcon(){
 
 		if(ewaConfig.icons.list.length === 0){
 			log("warning", `Was unable to find an icon to use for this webapp, falling back to a generic icon instead. Please link to one in any HTML file, ${ewaConfig.manifestPath}, or ${ewaConfig.configName}.`);
-			await fs.copy(path.join(EWASourcePath, "./src/injectables/generic/images/logo.svg"), path.join(ewaConfig.workPath, path.join(ewaConfig.alias, "default-icon.svg")));
+			await fs.copy(path.join(EWASourcePath, "./lib/scaffolding/images/logo.svg"), path.join(ewaConfig.workPath, path.join(ewaConfig.alias, "default-icon.svg")));
 			ewaConfig.icons.list.push(path.join(ewaConfig.alias, "default-icon.svg"));
 		}
 
