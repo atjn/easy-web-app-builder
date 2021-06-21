@@ -1,16 +1,19 @@
-/* -global ewaConfig */
+/* -global ewabConfig */
 
 /**
  * @file
- * This file contains some common functions that are used across EWA.
+ * This file contains some common functions that are used across EWAB.
  */
 
 import path from "path";
 import fs from "fs-extra";
 
-//import glob from "glob";
+import lodash_cloneDeep from "lodash.clonedeep";
+import lodash_mergeWith from "lodash.mergewith";
 
-import { EWASourcePath } from "./compat.js";
+//import glob from "tiny-glob";
+
+import { ewabSourcePath } from "./compat.js";
 
 
 /**
@@ -47,9 +50,9 @@ export function resolveURL(appRootPath = "", fileFolderPath = "", URL = ""){
  * 
  * @returns	{string}	- The current version of the app.
  */
-export function getEWAVersion(){
+export function getEWABVersion(){
 	
-	return fs.readJsonSync(path.join(EWASourcePath, "package.json")).version;
+	return fs.readJsonSync(path.join(ewabSourcePath, "package.json")).version;
 
 }
 
@@ -118,10 +121,33 @@ export function folderExists(folderPath){
 
 }
 
+/**
+ * This will properly merge two objects, the way you would expect it to work.
+ * 
+ * @param {object}	source	- The original object.
+ * @param {object}	update	- The new object to merge (this will overwrite anything in the original object).
+ * 
+ * @returns {object} - The new combined object.
+ */
+export function deepMerge(source, update){
+	return lodash_mergeWith({}, source, update, (source, update) => Array.isArray(source) ? [ ...source, ...update ] : undefined);
+}
+
+/**
+ * Clone an object.
+ * 
+ * @param {object} source	- The object to clone.
+ * 
+ * @returns {object} - The cloned object.
+ */
+export function deepClone(source){
+	return lodash_cloneDeep(source);
+}
+
 /*
 export function getAllItems(includeDirectories = false){
 
-	return glob.sync("**\/*", {cwd: ewaConfig.workPath, absolute: true}).filter(itemPath => {
+	return await glob("**\/*", {cwd: ewabConfig.workPath, absolute: true}).filter(itemPath => {
 
 		return includeDirectories ? true : fileExists(itemPath);
 	

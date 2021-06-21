@@ -1,54 +1,47 @@
-/* global ewaConfig ewaObjects */
 
 /**
  * @file
  * This is the main file/function for the entire package. It mostly just calls other functions in the correct order.
  */
 
-import path from "path";
-import fs from "fs-extra";
-
 import { log, bar } from "./log.js";
 import config from "./config.js";
 import cache from "./cache.js";
 import files from "./files.js";
-import serviceworker from "./serviceworker.js";
-import icons from "./icons.js";
 import minify from "./minify.js";
+import icons from "./icons.js";
+import serviceworker from "./serviceworker.js";
 
 
-	
 /**
- * This function is called when EWA starts.
+ * This function is called when EWAB starts.
  * It initiates global objects and controls the overall process.
  * 
  * @param	{object}	callConfig	- 
  */
 export default async function (callConfig = {}){
-	
-	global.ewaConfig = {
-		//Temporary interface config necessary in order to run logging. This will be overwritten when main config is generated
-		interface: callConfig.interface ? callConfig.interface : "modern",
-	};
 
-	global.ewaObjects = {
+	global.ewabObjects = {
 		minifiedHashes: [],
 	};
 
-	global.ewaConfig = await config.generateMain(callConfig);
+	global.ewabConfig = {};
 
 	log("modern-only", ""); 
-	bar.begin(`Warming up`);
-	bar(.1);
+
+	global.ewabConfig = await config.generateMain(callConfig); //calls bar.begin() as soon as possible
+
+	bar(.6);
 
 	await cache.ensure();
 
-	bar(.6);
+	bar(.8);
 
 	await files.begin();
 
 	bar.hide();
 	log.header();
+
 
 	await minify("remove");
 	
@@ -58,7 +51,7 @@ export default async function (callConfig = {}){
 
 	await serviceworker.link();
 
-	await fs.writeJson(path.join(ewaConfig.workPath, ewaConfig.manifestPath), ewaObjects.manifest);
+	await files.writeManifest();
 
 	await minify("files");
 

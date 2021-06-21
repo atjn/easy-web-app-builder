@@ -1,8 +1,8 @@
-/* global ewaConfig */
+/* global ewabConfig */
 
 /**
  * @file
- * These functions handle all of EWA's logging.
+ * These functions handle all of EWAB's logging.
  * Since logging is used extensively in this project, some best practices have been sacrificed in order to make the functions faster to use.
  */
 
@@ -10,6 +10,16 @@ import chalk from "chalk";
 import logUpdate from "log-update";
 
 import files from "./files.js";
+
+export const logInterfaces = {
+	modern: "Default, makes the output look nice.",
+	minimal: "WIll only show what it is currently doing. The only logs persisted after a completed runs are any warnings encountered.",
+	basic: "Outputs a simple line-by-line log.",
+	none: "No output at all",
+	debug: "Outputs a wealth of information that can help figure out why EWAB is that *that thing*",
+};
+
+export const defaultInterface = "modern";
 
 const progressBar = {
 	length: 13,
@@ -21,6 +31,12 @@ const progressBar = {
 		return `${chalk.bgGreen(" ".repeat(completedLength))}${chalk.bgGray(" ".repeat(progressBar.length - completedLength))} ${progressBar.spinnerCurrentFrame} ${progressBar.message}`;
 	},
 };
+
+let warmupLogged = false;
+
+const deferredLogs = [];
+
+let disabled = false;
 
 /**
  * Works mostly like `.padStart()` and `.padEnd()`, but splits the padding evenly between start and end, effectively centering the text.
@@ -47,7 +63,7 @@ String.prototype.padAround = function (length, padding){
  */
 export function log(type = "debug", message){
 
-	if(ewaConfig.interface === "none") return;
+	if(disabled) return;
 
 	//This is a pro gamer move that allows logging debug messages without having to define "debug" a million times.
 	if(message === undefined){
@@ -55,26 +71,30 @@ export function log(type = "debug", message){
 		type = "debug";
 	}
 
-	if(type === "warning"){
+	if(type === "error"){
+
+		bar.freeze();
+		console.log(`${chalk.black.bgRed("error".padAround(progressBar.length, " "))} ${chalk.red(message)}${ewabConfig.interface === "debug" ? "" : "\n"}`);
+		files.clean();
+		throw new Error(message);
+
+	}else if(!ewabConfig.interface){
+
+		deferredLogs.push({type, message});
+
+	}else if(type === "warning"){
 
 		logUpdate.clear();
 		console.log(`${chalk.black.bgYellow("warning".padAround(progressBar.length, " "))} ${chalk.yellow(message)}`);
 
-	}else if(type === "error"){
-
-		bar.end();
-		console.log(`${chalk.black.bgRed("error".padAround(progressBar.length, " "))} ${chalk.red(message)}\n`);
-		files.clean();
-		throw new Error(message);
-
-	}else if(ewaConfig.interface === "debug" && type === "debug"){
+	}else if(ewabConfig.interface === "debug" && type === "debug"){
 
 		console.log(`${chalk.black.bgGrey("debug".padAround(progressBar.length, " "))} ${message}`);
 
 	}else if(
-		(ewaConfig.interface === "debug" && type !== "modern-only") ||
-		(ewaConfig.interface !== "minimal" && type === "standard") ||
-		(ewaConfig.interface === "modern" && type === "modern-only")
+		(ewabConfig.interface === "debug" && type !== "modern-only") ||
+		(ewabConfig.interface !== "minimal" && type === "standard") ||
+		(ewabConfig.interface === "modern" && type === "modern-only")
 	){
 
 		console.log(message);
@@ -84,10 +104,42 @@ export function log(type = "debug", message){
 }
 
 /**
- * Logs the EWA header.
+ * This is called several times during startup, to make sure logging starts as soon as possible.
+ * Will test if an 'interface' type has been set, and if it has, begins proper logging.
+ * 
+ * @param {string}	[possibleInterface]	- An interface that could be used if it is valid and something else hasn't aready been set.
+ * 
+ */
+log.warmup = (possibleInterface) => {
+
+	if(warmupLogged) return;
+
+	if(!ewabConfig.interface && Object.keys(logInterfaces).includes(possibleInterface)){
+		ewabConfig.interface = possibleInterface;
+	}
+	
+	if(ewabConfig.interface){
+
+		disabled = Boolean(ewabConfig.interface === "none");
+
+		bar.begin("Warming up");
+
+		for(const deferredLog of deferredLogs){
+			log(deferredLog.type, deferredLog.message);
+		}
+
+		log(`Figured out that interface '${ewabConfig.interface}' should be used. Will now log ${deferredLogs.length + 1} logs that were queued for this moment.`);
+
+		warmupLogged = true;
+
+	}
+};
+
+/**
+ * Logs the EWAB header.
  */
 log.header = () => {
-	log("standard", `${chalk.black.bgCyan(" easy-webapp ")} Building webapp`);
+	log("standard", `${chalk.black.bgCyan(" easy-web-app-builder ")} Building webapp`);
 };
 
 /**
@@ -98,13 +150,13 @@ log.header = () => {
  */
 export function bar(progress, message){
 
-	if(ewaConfig.interface === "none") return;
+	if(disabled) return;
 
 	progressBar.progress = progress;
 
 	if(message){
 
-		if(!["modern", "minimal"].includes(ewaConfig.interface) && message && message !== progressBar.message){
+		if(!useTTY(ewabConfig.interface) && message && message !== progressBar.message){
 
 			log("standard", `${" ".repeat(progressBar.length)} ${message}..`);
 
@@ -124,12 +176,12 @@ export function bar(progress, message){
  */
 bar.begin = (message) => {
 
-	if(ewaConfig.interface === "none") return;
+	if(disabled) return;
 
 	progressBar.progress = 0;
 	progressBar.message = message;
 
-	if(["modern", "minimal"].includes(ewaConfig.interface)){
+	if(useTTY(ewabConfig.interface)){
 
 		progressBar.pulse = setInterval(() => {
 			progressBar.spinnerCurrentFrame = progressBar.spinnerFrames[(progressBar.spinnerFrames.indexOf(progressBar.spinnerCurrentFrame) + 1) % progressBar.spinnerFrames.length];
@@ -151,11 +203,11 @@ bar.begin = (message) => {
  */
 bar.end = (message) => {
 
-	if(ewaConfig.interface === "none") return;
+	if(disabled) return;
 
 	bar.hide();
 	
-	if(ewaConfig.interface !== "minimal"){
+	if(ewabConfig.interface !== "minimal"){
 		log("standard", `${chalk.black.bgGreen("success".padAround(progressBar.length, " "))} ${message}`);
 	}
 
@@ -166,9 +218,34 @@ bar.end = (message) => {
  */
 bar.hide = () => {
 
-	if(ewaConfig.interface === "none") return;
+	if(disabled) return;
 
-	if(progressBar.pulse) clearInterval(progressBar.pulse);
-	logUpdate.clear();
+	if(progressBar.pulse){
+		clearInterval(progressBar.pulse);
+		logUpdate.clear();
+	}
 
 };
+
+/**
+ * Freezes the ongoing progress bar.
+ */
+bar.freeze = () => {
+
+	if(disabled) return;
+
+	if(progressBar.pulse){
+		clearInterval(progressBar.pulse);
+		logUpdate.done();
+	}
+
+};
+
+function useTTY(interfaceMode){
+
+	if(!process.stdout.isTTY) return false;
+
+	if(!["modern", "minimal"].includes(interfaceMode)) return false;
+
+	return true;
+}

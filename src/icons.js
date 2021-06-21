@@ -1,4 +1,4 @@
-/* global ewaConfig ewaObjects */
+/* global ewabConfig ewabObjects */
 
 /**
  * @file
@@ -14,10 +14,10 @@ import objectHash from "object-hash";
 
 
 import jsdom from "jsdom";
-import glob from "glob";
+import glob from "tiny-glob";
 
 
-import { EWASourcePath } from "./compat.js";
+import { ewabSourcePath } from "./compat.js";
 import { log, bar } from "./log.js";
 import { getExtension, getFolderFiles, fileExists, resolveURL } from "./tools.js";
 
@@ -29,7 +29,7 @@ import PWAAssetGenerator from "pwa-asset-generator";
  */
 async function add(){
 
-	if(ewaConfig.icons.add === true){
+	if(ewabConfig.icons.add === true){
 
 		bar.begin("Generating icons");
 
@@ -42,18 +42,18 @@ async function add(){
 			opaque: false,
 			scrape: false,
 			favicon: true,
-			pathOverride: `${ewaConfig.alias}/icons`,
+			pathOverride: `${ewabConfig.alias}/icons`,
 			mstile: true,
 			log: false,
 		};
 
 		const hash = {
-			"sourceHash": (await folderHash(path.join(ewaConfig.workPath, ewaConfig.icons.source))).hash,
+			"sourceHash": (await folderHash(path.join(ewabConfig.workPath, ewabConfig.icons.source))).hash,
 			"config": objectHash(generatorConfig),
 		};
 
-		await fs.ensureFile(path.join(ewaConfig.cachePath, "icons-hash.json"));
-		const cachedHash = await fs.readJson(path.join(ewaConfig.cachePath, "icons-hash.json"), {throws: false});
+		await fs.ensureFile(path.join(ewabConfig.cachePath, "icons-hash.json"));
+		const cachedHash = await fs.readJson(path.join(ewabConfig.cachePath, "icons-hash.json"), {throws: false});
 
 		if(
 			hash.sourceHash === cachedHash?.sourceHash &&
@@ -67,20 +67,20 @@ async function add(){
 			log("Icon cache was either missing, corrupt, or outdated, so building a new one");
 
 			await Promise.all([
-				fs.emptyDir(path.join(ewaConfig.cachePath, "icons")),
-				fs.emptyDir(path.join(ewaConfig.cachePath, "icons-injectables")),
+				fs.emptyDir(path.join(ewabConfig.cachePath, "icons")),
+				fs.emptyDir(path.join(ewabConfig.cachePath, "icons-injectables")),
 			]);
 
 			bar(.05, "Generating icons");
 			const checkProgress = setInterval(() => {
 				//Expects pwa-asset-generator to generate 30 files. Not a perfect measure, but good enough for a status bar.
-				const progress = .05 + ((fs.readdirSync(path.join(ewaConfig.cachePath, "icons")).length / 30) * .8);
+				const progress = .05 + ((fs.readdirSync(path.join(ewabConfig.cachePath, "icons")).length / 30) * .8);
 				bar(Math.min(progress, .85));
 			}, 1000);
 
 			const output = await PWAAssetGenerator.generateImages(
-				path.join(ewaConfig.workPath, ewaConfig.icons.source),
-				path.join(ewaConfig.cachePath, "icons"),
+				path.join(ewabConfig.workPath, ewabConfig.icons.source),
+				path.join(ewabConfig.cachePath, "icons"),
 				generatorConfig,
 			);
 			
@@ -91,42 +91,42 @@ async function add(){
 			const htmlString = Object.values(output.htmlMeta).join("");
 			
 			await Promise.all([
-				fs.writeFile(path.join(ewaConfig.cachePath, "icons-injectables/index.html"), htmlString),
-				fs.writeJson(path.join(ewaConfig.cachePath, "icons-injectables/manifest.json"), output.manifestJsonContent),
-				fs.writeJson(path.join(ewaConfig.cachePath, "icons-hash.json"), hash),
+				fs.writeFile(path.join(ewabConfig.cachePath, "icons-injectables/index.html"), htmlString),
+				fs.writeJson(path.join(ewabConfig.cachePath, "icons-injectables/manifest.json"), output.manifestJsonContent),
+				fs.writeJson(path.join(ewabConfig.cachePath, "icons-hash.json"), hash),
 			]);
 		
 		}
 
 		bar(.9, "Adding icons to project");
 
-		await fs.copy(path.join(ewaConfig.cachePath, "icons"), path.join(ewaConfig.workPath, ewaConfig.alias, "icons"));
+		await fs.copy(path.join(ewabConfig.cachePath, "icons"), path.join(ewabConfig.workPath, ewabConfig.alias, "icons"));
 
-		ewaConfig.icons.list = [ ...new Set([
-			...ewaConfig.icons.list,
-			...getFolderFiles(path.join(ewaConfig.workPath, ewaConfig.alias, "icons")).map(iconPath => path.join(ewaConfig.alias, "icons", iconPath)),
+		ewabConfig.icons.list = [ ...new Set([
+			...ewabConfig.icons.list,
+			...getFolderFiles(path.join(ewabConfig.workPath, ewabConfig.alias, "icons")).map(iconPath => path.join(ewabConfig.alias, "icons", iconPath)),
 		]) ];
 
 
-		for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
+		for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
 
 			const html = new jsdom.JSDOM(await fs.readFile(markupPath));
 
 			if(!html?.window?.document?.head) continue;
 
 			const iconsContainer = html.window.document.createElement("div");
-			iconsContainer.innerHTML += await fs.readFile(path.join(ewaConfig.cachePath, "icons-injectables/index.html"));
+			iconsContainer.innerHTML += await fs.readFile(path.join(ewabConfig.cachePath, "icons-injectables/index.html"));
 			html.window.document.body.appendChild(iconsContainer);
 
 			for(const generatedElement of iconsContainer.querySelectorAll("link, meta")){
 				
-				//Make sure we don't tell Apple that a site without a serviceworker is webapp-capable
-				if(generatedElement.name === "apple-mobile-web-app-capable" && !ewaConfig.serviceworker.add) generatedElement.remove();
+				//Make sure we don't tell Apple that a site without a serviceworker is web-app-capable
+				if(generatedElement.name === "apple-mobile-web-app-capable" && !ewabConfig.serviceworker.add) generatedElement.remove();
 
 				//Make sure the link points to the correct relative destination
 				const baseLink = generatedElement.href || generatedElement.content;
 				if(baseLink && baseLink !== "yes"){
-					const absolutePath = resolveURL(ewaConfig.workPath, ewaConfig.workPath, baseLink);
+					const absolutePath = resolveURL(ewabConfig.workPath, ewabConfig.workPath, baseLink);
 					const relativeLink = path.relative(path.join(markupPath, ".."), absolutePath);
 					if(generatedElement.href){
 						generatedElement.href = relativeLink;
@@ -158,7 +158,7 @@ async function add(){
 						if(merged){
 							existingElement.remove();
 						}else{
-							switch(ewaConfig.icons.mergeMode.index){
+							switch(ewabConfig.icons.mergeMode.index){
 								case "overwrite":
 									existingElement.remove();
 									html.window.document.head.appendChild(generatedElement);
@@ -186,11 +186,11 @@ async function add(){
 
 		}
 
-		for(const generatedIcon of await fs.readJson(path.join(ewaConfig.cachePath, "icons-injectables/manifest.json"))){
+		for(const generatedIcon of await fs.readJson(path.join(ewabConfig.cachePath, "icons-injectables/manifest.json"))){
 
 			let merged = false;
 
-			for(const [index, existingIcon] of ewaObjects.manifest.icons.entries()){
+			for(const [index, existingIcon] of ewabObjects.manifest.icons.entries()){
 
 				let match = true;
 
@@ -203,12 +203,12 @@ async function add(){
 
 				if(match){
 					if(merged){
-						ewaObjects.manifest.icons.splice(index, 1);
+						ewabObjects.manifest.icons.splice(index, 1);
 					}else{
-						switch(ewaConfig.icons.mergeMode.manifest){
+						switch(ewabConfig.icons.mergeMode.manifest){
 							case "overwrite":
-								ewaObjects.manifest.icons.splice(index, 1);
-								ewaObjects.manifest.icons.push(generatedIcon);
+								ewabObjects.manifest.icons.splice(index, 1);
+								ewabObjects.manifest.icons.push(generatedIcon);
 								break;
 							case "preserve":
 								break;
@@ -220,7 +220,7 @@ async function add(){
 			}
 
 			if(!merged){
-				ewaObjects.manifest.icons.push(generatedIcon);
+				ewabObjects.manifest.icons.push(generatedIcon);
 				merged = true;
 			}
 
@@ -234,26 +234,26 @@ async function add(){
 
 async function ensureSourceIcon(){
 
-	if(ewaConfig.icons.source && !fileExists(path.join(ewaConfig.workPath, ewaConfig.icons.source))){
-		log("warning", `Was unable to find the source icon at '${ewaConfig.icons.source}'. Will instead find the most suitable source icon automagically.`);
-		ewaConfig.icons.source = "";
+	if(ewabConfig.icons.source && !fileExists(path.join(ewabConfig.workPath, ewabConfig.icons.source))){
+		log("warning", `Was unable to find the source icon at '${ewabConfig.icons.source}'. Will instead find the most suitable source icon automagically.`);
+		ewabConfig.icons.source = "";
 	}
 
-	if(!ewaConfig.icons.source){
+	if(!ewabConfig.icons.source){
 
 		log("No source icon is defined in config, will instead find the biggest icon (in bytes) and use that as source icon.");
 
-		if(ewaConfig.icons.list.length === 0){
-			log("warning", `Was unable to find an icon to use for this webapp, falling back to a generic icon instead. Please link to one in any HTML file, ${ewaConfig.manifestPath}, or ${ewaConfig.configName}.`);
-			await fs.copy(path.join(EWASourcePath, "./lib/scaffolding/images/logo.svg"), path.join(ewaConfig.workPath, path.join(ewaConfig.alias, "default-icon.svg")));
-			ewaConfig.icons.list.push(path.join(ewaConfig.alias, "default-icon.svg"));
+		if(ewabConfig.icons.list.length === 0){
+			log("warning", `Was unable to find an icon to use for this webapp, falling back to a generic icon instead. Please link to one in any HTML file, ${ewabConfig.manifestPath}, or ${ewabConfig.configName}.`);
+			await fs.copy(path.join(ewabSourcePath, "./lib/scaffolding/images/logo.svg"), path.join(ewabConfig.workPath, path.join(ewabConfig.alias, "default-icon.svg")));
+			ewabConfig.icons.list.push(path.join(ewabConfig.alias, "default-icon.svg"));
 		}
 
 		let bestIconPath = "";
 		let hasSVG = false;
 		let largestIconSize = 0;
 
-		for(const iconPath of ewaConfig.icons.list.map(relativePath => path.join(ewaConfig.workPath, relativePath))){
+		for(const iconPath of ewabConfig.icons.list.map(relativePath => path.join(ewabConfig.workPath, relativePath))){
 
 			const isSVG = Boolean(getExtension(iconPath) === "svg");
 
@@ -277,9 +277,9 @@ async function ensureSourceIcon(){
 
 		}
 
-		log(`Decided to use '${path.relative(ewaConfig.workPath, bestIconPath)}' as source icon.`);
+		log(`Decided to use '${path.relative(ewabConfig.workPath, bestIconPath)}' as source icon.`);
 
-		ewaConfig.icons.source = path.relative(ewaConfig.workPath, bestIconPath);
+		ewabConfig.icons.source = path.relative(ewabConfig.workPath, bestIconPath);
 
 	}
 

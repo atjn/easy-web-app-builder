@@ -1,4 +1,4 @@
-/* global ewaConfig ewaObjects */
+/* global ewabConfig ewabObjects */
 
 /**
  * @file
@@ -9,7 +9,7 @@ import path from "path";
 import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
 
-import { getEWAVersion, getFolderFiles } from "./tools.js";
+import { getEWABVersion, getFolderFiles } from "./tools.js";
 import { log } from "./log.js";
 
 export default { ensure, seal };
@@ -23,19 +23,19 @@ async function ensure(){
 
 	log("Making sure the cache folder is valid");
 
-	await fs.ensureFile(path.join(ewaConfig.cachePath, "cache-hash.json"));
-	const cacheHash = await fs.readJson(path.join(ewaConfig.cachePath, "cache-hash.json"), {throws: false});
+	await fs.ensureFile(path.join(ewabConfig.cachePath, "cache-hash.json"));
+	const cacheHash = await fs.readJson(path.join(ewabConfig.cachePath, "cache-hash.json"), {throws: false});
 
 	if(
-		ewaConfig.useCache === false ||
-		(await generateHash(ewaConfig.cachePath)) !== cacheHash?.hash ||
-		getEWAVersion() !== cacheHash?.version ||
-		ewaConfig.hash !== cacheHash?.config
+		ewabConfig.useCache === false ||
+		(await generateHash(ewabConfig.cachePath)) !== cacheHash?.hash ||
+		getEWABVersion() !== cacheHash?.version ||
+		ewabConfig.hash !== cacheHash?.config
 	){
 
 		log("The cache folder is either missing, corrupt, outdated, or disabled by user, so overwriting it with a clean one");
 
-		await fs.emptyDir(ewaConfig.cachePath);
+		await fs.emptyDir(ewabConfig.cachePath);
 		
 		await Promise.all(
 			[
@@ -43,7 +43,7 @@ async function ensure(){
 				"icons",
 				"icons-injectables",
 				"serviceworker",
-			].map(folder => fs.ensureDir(path.join(ewaConfig.cachePath, folder))),
+			].map(folder => fs.ensureDir(path.join(ewabConfig.cachePath, folder))),
 		);
 
 	}else{
@@ -62,18 +62,18 @@ async function ensure(){
  */
 async function seal(){
 
-	if(ewaConfig.useCache){
+	if(ewabConfig.useCache){
 
 		log("Cleaning and sealing cache to make it ready for next run");
 
-		await cleanUnusedFiles(path.join(ewaConfig.rootPath, ewaConfig.inputPath), ewaConfig.cachePath);
+		await cleanUnusedFiles(path.join(ewabConfig.rootPath, ewabConfig.inputPath), ewabConfig.cachePath);
 
 		await fs.writeJson(
-			path.join(ewaConfig.cachePath, "cache-hash.json"),
+			path.join(ewabConfig.cachePath, "cache-hash.json"),
 			{
-				"hash": (await generateHash(ewaConfig.cachePath)),
-				"version": getEWAVersion(),
-				"config": ewaConfig.hash,
+				"hash": (await generateHash(ewabConfig.cachePath)),
+				"version": getEWABVersion(),
+				"config": ewabConfig.hash,
 			},
 		);
 
@@ -81,7 +81,7 @@ async function seal(){
 
 		log("User has disabled cache, so removing it");
 
-		fs.remove(ewaConfig.cachePath);
+		fs.remove(ewabConfig.cachePath);
 
 	}
 
@@ -97,7 +97,7 @@ async function seal(){
 async function generateHash(){
 
 	return (await folderHash(
-		ewaConfig.cachePath,
+		ewabConfig.cachePath,
 		{
 			"files": {
 				"exclude": [
@@ -116,12 +116,12 @@ async function cleanUnusedFiles(){
 
 	const cacheRemovals = [];
 
-	for(const itemPath of getFolderFiles(path.join(ewaConfig.cachePath, "/items"))){
+	for(const itemPath of getFolderFiles(path.join(ewabConfig.cachePath, "/items"))){
 
-		if(!ewaObjects.minifiedHashes.reduce((used, hash) => Boolean(itemPath.includes(hash) ? true : used))){
+		if(!ewabObjects.minifiedHashes.reduce((used, hash) => Boolean(itemPath.includes(hash) ? true : used))){
 			log(`Removing minified item '${itemPath}' from cache, as it is no longer used`);
 			cacheRemovals.push(
-				fs.remove(path.join(ewaConfig.cachePath, "/items", itemPath)),
+				fs.remove(path.join(ewabConfig.cachePath, "/items", itemPath)),
 			);
 		}
 

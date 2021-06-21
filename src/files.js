@@ -1,4 +1,4 @@
-/* global ewaConfig ewaObjects */
+/* global ewabConfig ewabObjects */
 
 /**
  * @file
@@ -11,24 +11,25 @@ import os from "os";
 
 import { log } from "./log.js";
 import { fileExists, folderExists, resolveURL, getSubfolders } from "./tools.js";
-import { EWASourcePath } from "./compat.js";
+import { ewabSourcePath } from "./compat.js";
+import { defaultAlias } from "./config.js";
 
-import glob from "glob";
+import glob from "tiny-glob";
 import jsdom from "jsdom";
 import escapeStringRegexp from "escape-string-regexp";
 
 
 /**
- * Creates a workFolder where the source website will be manipulated by EWA.
+ * Creates a workFolder where the source website will be manipulated by EWAB.
  * Then makes sure a few necessary files and code paths exists.
  */
 async function begin(){
 
-	if(!ewaConfig.inputPath){
+	if(!ewabConfig.inputPath){
 
 		log(`No input folder path is set, trying to guess it instead`);
 
-		let matches = findInputFolderCandidates(ewaConfig.rootPath);
+		let matches = findInputFolderCandidates(ewabConfig.rootPath);
 
 		if(matches.length === 0){
 			log("error", `Was not able to find an input folder`);
@@ -41,7 +42,7 @@ async function begin(){
 			for(const match of matches) if(match.brand) brandFolderExists = true;
 
 			if(brandFolderExists){
-				log(`Found a folder that specifically has EWAs name in its name. Will only consider folders that have that.`);
+				log(`Found a folder that specifically has EWABs name in its name. Will only consider folders that have that.`);
 				matches = matches.filter(match => Boolean(match.brand));
 			}
 			
@@ -58,12 +59,12 @@ async function begin(){
 
 				let score = 0;
 				
-				const candidatePath = path.join(ewaConfig.rootPath, match.name);
+				const candidatePath = path.join(ewabConfig.rootPath, match.name);
 
 				if(fileExists(path.join(candidatePath, "index.html"))){
 					score++;
 				}
-				if(glob.sync("**/*.{html,htm}", {cwd: candidatePath, absolute: true}).length === 0){
+				if(await glob("**/*.{html,htm}", {cwd: candidatePath, absolute: true}).length === 0){
 					score = score - 1;
 				}
 
@@ -90,75 +91,73 @@ async function begin(){
 			log(`Decided to use '${matches[0].name}' as input folder`);
 		}
 
-		ewaConfig.inputPath = matches[0].name;
+		ewabConfig.inputPath = matches[0].name;
 
 	}
 
-	if(!ewaConfig.outputPath){
+	if(!ewabConfig.outputPath){
 
 		log(`No output folder path is set, will try to call it something that matches the name of the input folder.`);
 
-		const name = decideOutputFolderName(ewaConfig.inputPath);
-		const candidatePath = path.join(ewaConfig.rootPath, name);
+		const name = decideOutputFolderName(ewabConfig.inputPath);
+		const candidatePath = path.join(ewabConfig.rootPath, name);
 
 		if(fileExists(candidatePath)){
 
-			const backupName = `${ewaConfig.alias}-backup-${name}`;
-			log("warning", `The final webapp will be saved to the folder '${name}', but a file already exists at that path. The file has been backed up as '${backupName}'. Read more here:`);
-			await fs.rename(candidatePath, path.join(ewaConfig.rootPath, backupName));
+			const backupName = `${ewabConfig.alias}-backup-${name}`;
+			log("warning", `The final webapp will be saved to the folder '${name}', but a file already exists at that path. The file has been backed up as '${backupName}'.`);
+			await fs.rename(candidatePath, path.join(ewabConfig.rootPath, backupName));
 		
 		}else if(folderExists(candidatePath) && (await fs.readdir(candidatePath)).length > 0){
 
-			if(inputMatch.brand){
-				log(`A folder called '${name}' already exists, but since it has EWAs name directly in it, it is assumed that it can be safely overwritten.`);
+			log(`A folder called '${name}' already exists. Will have to guess if it is safe to overwrite it.`);
+
+			if(
+				[
+					candidatePath.toLowerCase().includes(ewabConfig.alias.toLowerCase()),
+					( ewabConfig.manifestPath && fileExists(path.join(candidatePath, ewabConfig.manifestPath)) ),
+					( folderExists(path.join(candidatePath, ewabConfig.alias)) || folderExists(path.join(candidatePath, defaultAlias)) ),
+					( fileExists(path.join(ewabConfig.rootPath, ewabConfig.inputPath, "index.html")) && fileExists(path.join(candidatePath, "index.html")) ),
+				]
+					.reduce(( count, assertion ) => count + assertion ? 1 : 0) < 2
+			){
+				const backupName = `${ewabConfig.alias}-backup-${name}`;
+				log("warning", `The final webapp will be saved to the folder '${name}', but was unsure if the existing contents of that folder was important, so it has been backed up as '${backupName}'.`);
+				await fs.rename(candidatePath, path.join(ewabConfig.rootPath, backupName));
 			}else{
-				log(`A folder called '${name}' already exists. Will have to guess if it is safe to overwrite it.`);
-
-				if(
-					( ewaConfig.manifestPath && fileExists(path.join(candidatePath, ewaConfig.manifestPath)) ) ||
-					folderExists(path.join(candidatePath, ewaConfig.alias)) ||
-					folderExists(path.join(candidatePath, "ewa")) ||
-					( fileExists(path.join(ewaConfig.rootPath, ewaConfig.inputPath, "index.html")) && fileExists(path.join(candidatePath, "index.html")) )
-				){
-					log(`It seems like the '${name}' folder contains an old EWA output app, so it should be safe to overwrite.`);
-				}else{
-					const backupName = `${ewaConfig.alias}-backup-${name}`;
-					log("warning", `The final webapp will be saved to the folder '${name}', but was unsure if the existing contents of that folder was important, so it has been backed up as '${backupName}'. Read more here:`);
-					await fs.rename(candidatePath, path.join(ewaConfig.rootPath, backupName));
-				}
-
+				log(`It seems like the '${name}' folder contains an old EWAB output app, so it should be safe to overwrite.`);
 			}
 
 		}else{
 			log(`Decided to call it '${name}'.`);
 		}
 
-		ewaConfig.outputPath = name;
+		ewabConfig.outputPath = name;
 
 	}
 
 	log(`Setting up basic necessary folders`);
 
-	await fs.ensureDir(path.join(ewaConfig.rootPath, ewaConfig.inputPath));
-	await fs.ensureDir(path.join(ewaConfig.rootPath, ewaConfig.outputPath));
-	ewaConfig.workPath = await fs.mkdtemp(path.join(os.tmpdir(), "node-easy-webapp-"));
+	await fs.ensureDir(path.join(ewabConfig.rootPath, ewabConfig.inputPath));
+	await fs.ensureDir(path.join(ewabConfig.rootPath, ewabConfig.outputPath));
+	ewabConfig.workPath = await fs.mkdtemp(path.join(os.tmpdir(), "node-easy-web-app-builder-"));
 
-	log(`Copying source files from '${path.join(ewaConfig.inputPath)}' to the work folder at '${path.relative(ewaConfig.rootPath, ewaConfig.workPath)}'`);
+	log(`Copying source files from '${path.join(ewabConfig.inputPath)}' to the work folder at '${path.relative(ewabConfig.rootPath, ewabConfig.workPath)}'`);
 
-	await fs.copy(path.join(ewaConfig.rootPath, ewaConfig.inputPath), ewaConfig.workPath);
-	await fs.ensureDir(path.join(ewaConfig.workPath, ewaConfig.alias));
-	await fs.ensureDir(path.join(ewaConfig.workPath, ewaConfig.alias, "sourceMaps"));
+	await fs.copy(path.join(ewabConfig.rootPath, ewabConfig.inputPath), ewabConfig.workPath);
+	await fs.ensureDir(path.join(ewabConfig.workPath, ewabConfig.alias));
+	await fs.ensureDir(path.join(ewabConfig.workPath, ewabConfig.alias, "sourceMaps"));
 
 	log("Making sure HTML files are usable");
 
-	const markupPaths = glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true});
+	const markupPaths = await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true});
 	let markupHeads = 0;
 	for(const markupPath of markupPaths){
 
 		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
 
 		if(!html?.window?.document){
-			log("warning", `The HTML file '${path.relative(ewaConfig.workPath, markupPath)}' seems to be invalid. This could cause problems later on, please fix it.`);
+			log("warning", `The HTML file '${path.relative(ewabConfig.workPath, markupPath)}' seems to be invalid. This could cause problems later on, please fix it.`);
 		}
 		if(html?.window?.document?.head){
 			markupHeads++;
@@ -169,22 +168,22 @@ async function begin(){
 	log(`Trying to find a link to the site manifest`);
 
 	log("Looking in config");
-	if(ewaConfig.manifestPath){
+	if(ewabConfig.manifestPath){
 
-		if(fileExists(path.join(ewaConfig.workPath, ewaConfig.manifestPath))){
-			if(await readManifest(path.join(ewaConfig.workPath, ewaConfig.manifestPath))){
+		if(fileExists(path.join(ewabConfig.workPath, ewabConfig.manifestPath))){
+			if(await readManifest(path.join(ewabConfig.workPath, ewabConfig.manifestPath))){
 				log(`The manifest link in config seems valid`);
 			}else{
-				ewaObjects.manifest = {};
+				ewabObjects.manifest = {};
 			}
 		}else{
-			ewaConfig.manifestPath = undefined;
+			ewabConfig.manifestPath = undefined;
 			log("warning", `The manifest path in the config file doesn't point to a file. Please fix the path or remove it.`);
 		}
 
 	}
 
-	if(!ewaConfig.manifestPath){
+	if(!ewabConfig.manifestPath){
 		log("Looking in HTML files");
 
 		const possibleManifestPaths = [];
@@ -194,7 +193,7 @@ async function begin(){
 			if(!html?.window?.document?.head) continue;
 			
 			for(const manifestLink of html.window.document.head.querySelectorAll("link[rel=manifest]")){
-				possibleManifestPaths.push(resolveURL(ewaConfig.workPath, markupPath, manifestLink.href));
+				possibleManifestPaths.push(resolveURL(ewabConfig.workPath, markupPath, manifestLink.href));
 			}
 		}
 
@@ -206,8 +205,8 @@ async function begin(){
 				log(`Found a link to a valid manifest file in an HTML file`);
 			}else{
 				if(manifestPaths.indexOf(manifestPath) + 1 === manifestPaths.length){
-					ewaObjects.manifest = {};
-					ewaConfig.manifestPath = path.relative(ewaConfig.workPath, manifestPath);
+					ewabObjects.manifest = {};
+					ewabConfig.manifestPath = path.relative(ewabConfig.workPath, manifestPath);
 					log("This is the last manifest file found, so keeping it despite it being invalid.");
 					break;
 				}else{
@@ -218,23 +217,23 @@ async function begin(){
 
 	}
 
-	if(!ewaConfig.manifestPath){
+	if(!ewabConfig.manifestPath){
 		log("Trying to guess the path");
 		
-		const possibleManifestPath = path.join(ewaConfig.workPath, "manifest.json");
+		const possibleManifestPath = path.join(ewabConfig.workPath, "manifest.json");
 		if(fileExists(possibleManifestPath)){
 			if(await readManifest(possibleManifestPath)){
-				log(`Guessed the manifest path: ${path.relative(ewaConfig.workPath, possibleManifestPath)}`);
+				log(`Guessed the manifest path: ${path.relative(ewabConfig.workPath, possibleManifestPath)}`);
 			}else{
-				log(`Guessed a valid manifest path, but the file seems invalid, so won't use: ${path.relative(ewaConfig.workPath, possibleManifestPath)}`);
+				log(`Guessed a valid manifest path, but the file seems invalid, so won't use: ${path.relative(ewabConfig.workPath, possibleManifestPath)}`);
 			}
 		}
 	}
 
-	if(!ewaConfig.manifestPath){
-		log("warning", `No site manifest found, so using a generic one instead. You can generate one in your source folder with the command: easy-webapp scaffold "manifest"`);
-		await fs.copy(path.join(EWASourcePath, "lib/scaffolding/manifest.json"), path.join(ewaConfig.workPath, "manifest.json"));
-		await readManifest(path.join(ewaConfig.workPath, "manifest.json"));
+	if(!ewabConfig.manifestPath){
+		log("warning", `No site manifest found, so using a generic one instead. You can generate one in your source folder with the command: easy-web-app-builder scaffold "manifest"`);
+		await fs.copy(path.join(ewabSourcePath, "lib/scaffolding/manifest.json"), path.join(ewabConfig.workPath, "manifest.json"));
+		await readManifest(path.join(ewabConfig.workPath, "manifest.json"));
 	}
 
 	/**
@@ -246,30 +245,30 @@ async function begin(){
 	 */
 	async function readManifest(manifestPath){
 		try{
-			ewaObjects.manifest = await fs.readJson(manifestPath);
-			ewaConfig.manifestPath = path.relative(ewaConfig.workPath, manifestPath);
+			ewabObjects.manifest = await fs.readJson(manifestPath);
+			ewabConfig.manifestPath = path.relative(ewabConfig.workPath, manifestPath);
 			return true;
 		}catch(error){
-			log("warning", `The manifest file '${ewaConfig.manifestPath}' seems to be invalid. This might cause problems later on, please fix it.`);
+			log("warning", `The manifest file '${ewabConfig.manifestPath}' seems to be invalid. This might cause problems later on, please fix it.`);
 			return false;
 		}
 	}
 
 	log("Adding links to the site manifest");
-	for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
+	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
 
 		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
 
 		if(!html?.window?.document?.head){
-			log(`${path.relative(ewaConfig.workPath, markupPath)} doesn't have a <head>, so won't add a reference to manifest.`);
+			log(`${path.relative(ewabConfig.workPath, markupPath)} doesn't have a <head>, so won't add a reference to manifest.`);
 			continue;
 		}
 
-		log(`Adding a reference to the manifest file in ${path.relative(ewaConfig.workPath, markupPath)} (overriding any existing).`);
+		log(`Adding a reference to the manifest file in ${path.relative(ewabConfig.workPath, markupPath)} (overriding any existing).`);
 
 		for(const manifestLink of html.window.document.head.querySelectorAll("link[rel=manifest]")) manifestLink.remove();
 
-		const relativeManifestLink = path.relative(path.join(markupPath, ".."), path.join(ewaConfig.workPath, ewaConfig.manifestPath));
+		const relativeManifestLink = path.relative(path.join(markupPath, ".."), path.join(ewabConfig.workPath, ewabConfig.manifestPath));
 
 		const manifestLinkElement = html.window.document.createElement("link"); manifestLinkElement.rel = "manifest"; manifestLinkElement.href = relativeManifestLink;
 		html.window.document.head.appendChild(manifestLinkElement);
@@ -281,8 +280,8 @@ async function begin(){
 
 	log("Discovering and verifying icons");
 
-	ewaConfig.icons.list = ewaConfig.icons.list.filter(iconPath => {
-		if(fileExists(path.join(ewaConfig.workPath, iconPath))){
+	ewabConfig.icons.list = ewabConfig.icons.list.filter(iconPath => {
+		if(fileExists(path.join(ewabConfig.workPath, iconPath))){
 			return true;
 		}else{
 			log("warning", `Found a reference to an icon '${iconPath}' in the config, but was unable to find an icon at that path. Please remove any broken references to icons.`);
@@ -290,7 +289,7 @@ async function begin(){
 		}
 	});
 
-	for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
+	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
 
 		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
 
@@ -298,27 +297,27 @@ async function begin(){
 
 		for(const icon of html.window.document.head.querySelectorAll("link[rel*=icon]")){
 			if(icon.href){
-				const iconPath = path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, markupPath, icon.href));
-				if(fileExists(path.join(ewaConfig.workPath, iconPath))){
+				const iconPath = path.relative(ewabConfig.workPath, resolveURL(ewabConfig.workPath, markupPath, icon.href));
+				if(fileExists(path.join(ewabConfig.workPath, iconPath))){
 					foundIcons.push(iconPath);
 				}else{
-					log("warning", `Found a reference to an icon '${iconPath}' in '${path.relative(ewaConfig.workPath, markupPath)}', but was unable to find an icon at that path. Please remove any broken references to icons.`);
+					log("warning", `Found a reference to an icon '${iconPath}' in '${path.relative(ewabConfig.workPath, markupPath)}', but was unable to find an icon at that path. Please remove any broken references to icons.`);
 				}
 			}
 		}
 
-		log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons in '${path.relative(ewaConfig.workPath, markupPath)}'.${foundIcons.length > 0 ? " Adding them to the icons list." : ""}`);
+		log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons in '${path.relative(ewabConfig.workPath, markupPath)}'.${foundIcons.length > 0 ? " Adding them to the icons list." : ""}`);
 
-		ewaConfig.icons.list.push(...foundIcons);
+		ewabConfig.icons.list.push(...foundIcons);
 
 	}
 
 	const foundManifestIcons = [];
-	if(!Array.isArray(ewaObjects.manifest.icons)) ewaObjects.manifest.icons = [];
-	for(const icon of ewaObjects.manifest.icons){
+	if(!Array.isArray(ewabObjects.manifest.icons)) ewabObjects.manifest.icons = [];
+	for(const icon of ewabObjects.manifest.icons){
 		if(icon.src){
-			const iconPath = path.relative(ewaConfig.workPath, resolveURL(ewaConfig.workPath, path.join(ewaConfig.workPath, ewaConfig.manifestPath), icon.src));
-			if(fileExists(path.join(ewaConfig.workPath, iconPath))){
+			const iconPath = path.relative(ewabConfig.workPath, resolveURL(ewabConfig.workPath, path.join(ewabConfig.workPath, ewabConfig.manifestPath), icon.src));
+			if(fileExists(path.join(ewabConfig.workPath, iconPath))){
 				foundManifestIcons.push(iconPath);
 			}else{
 				log("warning", `Found a reference to an icon '${iconPath}' in the manifest, but was unable to find an icon at that path. Please remove any broken references to icons.`);
@@ -326,10 +325,10 @@ async function begin(){
 		}
 	}
 	log(`${foundManifestIcons.length > 0 ? `Found ${foundManifestIcons.length}` : "Did not find any"} references to icons in manifest.${foundManifestIcons.length > 0 ? " Adding them to the icons list." : ""}`);
-	ewaConfig.icons.list.push(...foundManifestIcons);
+	ewabConfig.icons.list.push(...foundManifestIcons);
 
 	//Remove duplicates
-	ewaConfig.icons.list = [ ...new Set([ ...ewaConfig.icons.list ]) ];
+	ewabConfig.icons.list = [ ...new Set([ ...ewabConfig.icons.list ]) ];
 
 }
 
@@ -338,10 +337,10 @@ async function begin(){
  */
 async function end(){
 
-	log(`Copying completed files from '${path.relative(ewaConfig.rootPath, ewaConfig.workPath)}' to '${path.join(ewaConfig.outputPath)}'`);
+	log(`Copying completed files from '${path.relative(ewabConfig.rootPath, ewabConfig.workPath)}' to '${path.join(ewabConfig.outputPath)}'`);
 
-	await fs.emptyDir(path.join(ewaConfig.rootPath, ewaConfig.outputPath));
-	await fs.copy(ewaConfig.workPath, path.join(ewaConfig.rootPath, ewaConfig.outputPath));
+	await fs.emptyDir(path.join(ewabConfig.rootPath, ewabConfig.outputPath));
+	await fs.copy(ewabConfig.workPath, path.join(ewabConfig.rootPath, ewabConfig.outputPath));
 
 	clean();
 
@@ -355,11 +354,16 @@ async function clean(){
 
 	log(`Removing temporary work folders`);
 
-	fs.remove(ewaConfig.workPath);
+	if(ewabConfig?.workPath) fs.remove(ewabConfig.workPath);
+}
+
+async function writeManifest(){
+	log("Writing final manifest to project");
+	await fs.writeJson(path.join(ewabConfig.workPath, ewabConfig.manifestPath), ewabObjects.manifest);
 }
 
 /**
- * Makes a list of all folders that could be input folders for EWA.
+ * Makes a list of all folders that could be input folders for EWAB.
  * NOTE: the returned results are match objects as defined by `matchInputFolderName()`.
  * 
  * @param	{string}	rootPath	- The absolute path to the folder where input folder candidates should be found.
@@ -407,7 +411,7 @@ export function decideOutputFolderName(inputFolderName){
  * The object contains:
  * - name: The full name of the folder.
  * - type: What type of name was given to the folder (example: 'input', 'src).
- * - brand: The EWA name that was used in the folder name (undefined if no EWA name was used) (example: 'EWA', 'easy-webapp').
+ * - brand: The EWAB name that was used in the folder name (undefined if no EWAB name was used) (example: 'EWAB', 'easy-web-app-builder').
  * - delimiter: What delimiter was used between `brand` and `type` (undefined if there was no delimiter).
  * 
  * @param	{string}	name	- The name of the input folder.
@@ -416,11 +420,11 @@ export function decideOutputFolderName(inputFolderName){
  */
 function matchInputFolderName(name = ""){
 
-	const regex = new RegExp(`^(?<name>.?(?:(?<brand>${escapeStringRegexp(ewaConfig.alias)}|easy.?webapp))?(?<delimiter>.?)(?<type>input|in|source|src))$`, "ui");
+	const regex = new RegExp(`^(?<name>.?(?:(?<brand>${escapeStringRegexp(ewabConfig.alias)}|easy.?webapp))?(?<delimiter>.?)(?<type>input|in|source|src))$`, "ui");
 
 	return name.match(regex)?.groups;
 
 }
 
 
-export default { begin, end, clean };
+export default { begin, end, clean, writeManifest };

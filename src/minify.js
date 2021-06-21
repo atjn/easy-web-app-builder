@@ -1,4 +1,4 @@
-/* global ewaConfig ewaObjects */
+/* global ewabConfig ewabObjects */
 
 /**
  * @file
@@ -13,7 +13,7 @@ import { hashElement as folderHash } from "folder-hash";
 import getItemSize from "get-folder-size";
 import prettyBytes from "pretty-bytes";
 import { log, bar } from "./log.js";
-import { fileExists, getExtension, resolveURL } from "./tools.js";
+import { fileExists, getExtension, resolveURL, deepClone } from "./tools.js";
 import config from "./config.js";
 
 import jsdom from "jsdom";
@@ -25,7 +25,7 @@ import { ImagePool } from "@squoosh/lib";
 import os from "os";
 
 
-import glob from "glob";
+import glob from "tiny-glob";
 
 import { minify as htmlMinifier } from "html-minifier-terser";
 import { minify as terser } from "terser";
@@ -88,10 +88,10 @@ async function minify(type){
 
 	global.imagePool = type === "images" ? new ImagePool() : undefined;
 
-	const itemProcesses = [];
-	const itemProcessResults = [];
+	const itemProcessingQueue = [];
+	const itemProcessingResults = [];
 
-	for(const itemPath of glob.sync("**/*", {cwd: ewaConfig.workPath, absolute: true})){
+	for(const itemPath of await glob("**/*", {cwd: ewabConfig.workPath, absolute: true})){
 
 		if(["files", "images"].includes(type) && !fileExists(itemPath)) continue;
 
@@ -114,35 +114,40 @@ async function minify(type){
 			continue;
 		}
 
-		itemProcesses.push({path: itemPath, extension, type, fileConfig});
+		itemProcessingQueue.push({path: itemPath, extension, type, fileConfig});
 
 	}
 
-	const processItemMeta = async (item) => {
-		await processItem(item)
-		.then(result => {
-			itemProcessResults.push(result);
-			bar(itemProcessResults.length / itemProcesses.length);
-			return;
-		});
-	};
+	const concurrentThreads = Math.round(
+		Math.max(
+			Math.min(
+				os.freemem() / 8000,
+				os.cpus().length / 2,
+			),
+			1,
+		),
+	);
 
-	//await Promise.allSettled(itemProcesses); 
+	await asyncPool(
+		concurrentThreads,
+		itemProcessingQueue,
+		async item => {
+			await processItem(item)
+			.then(result => {
+				itemProcessingResults.push(result);
+				bar(itemProcessingResults.length / itemProcessingQueue.length);
+				return;
+			});
+		},
+	);
 
-	const concurrentThreads = Math.round(Math.min(
-		os.freemem() / 8000,
-		os.cpus().length / 2,
-	));
-
-	await asyncPool(concurrentThreads, itemProcesses, processItemMeta);
-
-	if(itemProcesses.length === 0){
+	if(itemProcessingQueue.length === 0){
 		bar.hide();
 	}else{
-		bar.end(`${processName.action.past} ${itemProcesses.length} ${itemProcesses.length === 1 ? processName.item.singular : processName.item.plural}, saving ${prettyBytes(itemProcessResults.reduce((a, b) => a + b, 0) / 1000)}`);
+		bar.end(`${processName.action.past} ${itemProcessingQueue.length} ${itemProcessingQueue.length === 1 ? processName.item.singular : processName.item.plural}, saving ${prettyBytes(itemProcessingResults.reduce((a, b) => a + b, 0) / 1000)}`);
 	}
 
-	if(type === "images" && ewaConfig.images.updateReferences){
+	if(type === "images" && ewabConfig.images.updateReferences){
 
 		await updateImageReferences();
 
@@ -156,14 +161,14 @@ async function minify(type){
 
 async function processItem(item){
 
-	const itemRelativePath = path.relative(ewaConfig.workPath, item.path);
+	const itemRelativePath = path.relative(ewabConfig.workPath, item.path);
 
 	try{
 
 		const originalSize = await getItemSize.loose(item.path);
 		const originalHash = (await folderHash(item.path, { "encoding": "hex" })).hash;
 
-		ewaObjects.minifiedHashes.push(originalHash);
+		ewabObjects.minifiedHashes.push(originalHash);
 
 		switch(item.type){
 
@@ -178,11 +183,11 @@ async function processItem(item){
 
 			case "files": {
 
-				const fileMapPath = path.join(ewaConfig.workPath, ewaConfig.alias, "sourceMaps", `${originalHash}.${item.extension}.map`);
+				const fileMapPath = path.join(ewabConfig.workPath, ewabConfig.alias, "sourceMaps", `${originalHash}.${item.extension}.map`);
 				const fileMapRelativePath = path.relative(path.join(item.path, ".."), fileMapPath);
 				const itemFolderPathRelativeToFileMap = path.join(path.relative(path.join(fileMapPath, ".."), item.path), "..");
 
-				const cachedFilePath = path.join(ewaConfig.cachePath, "items", `${originalHash}.${item.extension}`);
+				const cachedFilePath = path.join(ewabConfig.cachePath, "items", `${originalHash}.${item.extension}`);
 				const cachedFileMapPath = `${cachedFilePath}.map`;
 
 				if(fileExists(cachedFilePath)){
@@ -327,11 +332,11 @@ async function processItem(item){
 
 			case "images": {
 
-				const image = global.imagePool.ingestImage(item.path);
+				const originalImage = global.imagePool.ingestImage(item.path);
 
-				await image.decoded;
+				await originalImage.decoded;
 
-				item.fileConfig.images.resize = processResizeSettings(item.fileConfig.images.resize, {width: (await image.decoded).bitmap.width, height: (await image.decoded).bitmap.height});
+				item.fileConfig.images.resize = processResizeSettings(item.fileConfig.images.resize, {width: (await originalImage.decoded).bitmap.width, height: (await originalImage.decoded).bitmap.height});
 
 				const targetExtensions = [ ...new Set([ ...item.fileConfig.images.targetExtensions, item.fileConfig.images.targetExtension ]) ];
 
@@ -340,8 +345,8 @@ async function processItem(item){
 
 					try{
 
-						const cachedImagePath = path.join(ewaConfig.cachePath, "items", `${originalHash}-${size.width}w`);
-						const newImagePath = (ewaConfig.images.preserveOriginalFile && size.width === (await image.decoded).bitmap.width) ?
+						const cachedImagePath = path.join(ewabConfig.cachePath, "items", `${originalHash}-${size.width}w`);
+						const newImagePath = (ewabConfig.images.preserveOriginalFile && size.width === (await originalImage.decoded).bitmap.width) ?
 							item.path :
 							item.path.replace(/\.\w+$/u, `-${size.width}w$&`).replace(/\.\w+$/u, ".");
 
@@ -352,6 +357,8 @@ async function processItem(item){
 						if(integrity){
 							log(`Copying minified version${targetExtensions.length > 1 ? "s" : ""} of '${itemRelativePath}' from cache`);
 						}else{
+
+							const image = deepClone(originalImage);
 							
 							await image.preprocess(
 								{
@@ -371,16 +378,17 @@ async function processItem(item){
 
 								switch(targetExtension){
 									case "jxl":
+										options.jxl = {};
+										break;
 									case "avif":
-									case "wp2":
 									case "webp":
-										engine = targetExtension;
+										options[targetExtension] = {};
 										break;
 									case "png":
-										engine = "oxipng";
+										options.oxipng = {};
 										break;
 									case "jpg":
-										engine = "mozjpeg";
+										options.mozjpeg = {};
 										break;
 									default:
 										throw new Error(`Does not support minifying to image with extension "${targetExtension}"`);
@@ -411,7 +419,7 @@ async function processItem(item){
 
 					}catch(error){
 
-						log("warning", `Unable to minify '${itemRelativePath}'.${ewaConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
+						log("warning", `Unable to minify '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
 
 						log(`Squoosh error: ${error}`);
 					}
@@ -427,7 +435,7 @@ async function processItem(item){
 		if(error.includes("has an unsupported format")){
 			log("warning", `Was not able to read '${itemRelativePath}', it will not be minified.`);
 		}else{
-			log("warning", `Unable to minify '${itemRelativePath}'.${ewaConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
+			log("warning", `Unable to minify '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
 		}
 		log(`Squoosh error: ${error}`);
 
@@ -439,14 +447,14 @@ async function processItem(item){
 
 async function updateImageReferences(){
 
-	for(const sheetPath of glob.sync("**/*.css", {cwd: ewaConfig.workPath, absolute: true})){
+	for(const sheetPath of await glob("**/*.css", {cwd: ewabConfig.workPath, absolute: true})){
 
 		let css = await fs.readFile(sheetPath, "utf8");
 
 		for(const imageSet of css.matchAll(/[:,\s]-?\w*-?image-set\(\s*(?<urlElement>url\(\s*["'](?<url>["']+)["']\s*\))\s*\)/gui)){
 
 			const imagePath = resolveURL(
-				ewaConfig.workPath,
+				ewabConfig.workPath,
 				sheetPath,
 				imageSet.groups.url,
 			);
@@ -457,7 +465,7 @@ async function updateImageReferences(){
 
 				if(fileConfig.images.minify && fileConfig.images.convert){
 
-					log(`In ${path.relative(ewaConfig.rootPath, sheetPath)}: Updating reference to ${path.relative(ewaConfig.rootPath, imagePath)} with minified/converted images`);
+					log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: Updating reference to ${path.relative(ewabConfig.rootPath, imagePath)} with minified/converted images`);
 
 					const images = [];
 
@@ -471,12 +479,12 @@ async function updateImageReferences(){
 
 					}
 
-					css = css.replace(imageSet.groups.urlElement, ` /* Generated by easy-webapp */ ${images.join(", ")}`);
+					css = css.replace(imageSet.groups.urlElement, ` /* Generated by easy-web-app-builder */ ${images.join(", ")}`);
 
 				}
 
 			}else{
-				log(`In ${path.relative(ewaConfig.rootPath, sheetPath)}: Unable to parse URL at index: ${imageSet.index}, aboprting uprgade of the image-set.`);
+				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: Unable to parse URL at index: ${imageSet.index}, aboprting uprgade of the image-set.`);
 			}
 			
 
@@ -487,7 +495,7 @@ async function updateImageReferences(){
 
 	}
 
-	for(const markupPath of glob.sync("**/*.{html,htm}", {cwd: ewaConfig.workPath, absolute: true})){
+	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
 
 		const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
 
@@ -498,12 +506,12 @@ async function updateImageReferences(){
 				if(true){
 					
 					const srcPath = resolveURL(
-						ewaConfig.workPath,
+						ewabConfig.workPath,
 						markupPath,
 						img.src || "",
 					);
 					const srcsetPath = resolveURL(
-						ewaConfig.workPath,
+						ewabConfig.workPath,
 						markupPath,
 						img.srcset || "",
 					);
@@ -547,7 +555,7 @@ async function updateImageReferences(){
 				if((/^\s*[^,\s]+$/u).test(img.srcset)){
 
 					const imagePath = resolveURL(
-						ewaConfig.workPath,
+						ewabConfig.workPath,
 						markupPath,
 						img.srcset,
 					);
@@ -656,7 +664,7 @@ function processResizeSettings(resizeConfig, originalSize){
 		largerIndex++;
 	}
 
-	if(ewaConfig.images.preserveOriginalFile) resizeConfig.customSizes.push(originalSize);
+	if(ewabConfig.images.preserveOriginalFile) resizeConfig.customSizes.push(originalSize);
 	
 	resizeConfig.resizeTo = [ ...new Set([ ...resizeConfig.resizeTo, ...resizeConfig.customSizes ]) ].sort((a, b) => {return a.width - b.width;});
 

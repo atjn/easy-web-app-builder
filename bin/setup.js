@@ -11,15 +11,15 @@ const prompt = inquirer.createPromptModule();
 prompt.registerPrompt("file-tree", fileTree);
 
 import chalk from "chalk";
-import glob from "glob";
-import deepmerge from "deepmerge";
+import glob from "tiny-glob";
 
 import path from "path";
 import fs from "fs-extra";
 
-import { fileExists } from "../src/tools.js";
+import { fileExists, deepMerge } from "../src/tools.js";
 import { findInputFolderCandidates, decideOutputFolderName } from "../src/files.js";
 import scaffold from "./scaffold.js";
+import { defaultConfigName } from "../src/config.js";
 
 export default async function (args){
 
@@ -27,19 +27,19 @@ export default async function (args){
 	const s = "\n";
 
 	console.log("");
-	console.log(chalk.bgCyan.black("  Welcome to the Easy-WebApp (EWA) setup wizard  "));
-	console.log(chalk.dim("This wizard covers everything a normal user needs. For advanced stuff, check this out: https://github.com/atjn/easy-webapp#advanced"));
+	console.log(chalk.bgCyan.black("  Welcome to the Easy-WebApp (EWAB) setup wizard  "));
+	console.log(chalk.dim("This wizard covers everything a normal user needs. For advanced stuff, check this out: https://github.com/atjn/easy-web-app-builder#advanced"));
 	console.log("");
 	console.log(chalk.yellow(`NOTE: Some of these operations ${chalk.underline("will overwrite files")} in your project. Make sure to back up anything important first.`));
 
-	//Certain parts of ewaCOnfig must be defined in order to run some of EWAs functions:
-	global.ewaConfig = {
+	//Certain parts of ewabCOnfig must be defined in order to run some of EWABs functions:
+	global.ewabConfig = {
 		interface: "none",
 		alias: args.alias,
 		rootPath: args.rootPath || process.cwd(),
 	};
 
-	const inputFolderCandidates = findInputFolderCandidates(global.ewaConfig.rootPath);
+	const inputFolderCandidates = findInputFolderCandidates(global.ewabConfig.rootPath);
 
 	let allAnswers = {};
 
@@ -50,7 +50,7 @@ export default async function (args){
 			prefix: p, suffix: s,
 			message: `What are we doing today?`,
 			choices: [
-				"Adding EWA to an existing project",
+				"Adding EWAB to an existing project",
 				"Setting up a new project from scratch",
 			],
 			filter: answer => Boolean(answer === "Setting up a new project from scratch"),
@@ -60,7 +60,7 @@ export default async function (args){
 			name: "config.inputPath",
 			type: "input",
 			prefix: p, suffix: s,
-			message: `Which folder should we put the source files in?\n  ${chalk.dim("If you choose a folder that already exists, it will be overwritten.")}`,
+			message: `Which folder should we put the source files in?\n  ${chalk.dim("If you choose a folder that already exists, it will be overridden.")}`,
 			default: "source",
 			filter: answer => normalizeOutputPaths(answer),
 		},
@@ -69,7 +69,7 @@ export default async function (args){
 			name: "config.inputPath",
 			type: "list",
 			prefix: p, suffix: s,
-			message: `EWA thinks that the source files for your website are in the folder called '${inputFolderCandidates[0].name}'. Is that correct?`,
+			message: `EWAB thinks that the source files for your website are in the folder called '${inputFolderCandidates[0].name}'. Is that correct?`,
 			choices: [
 				"Yes!",
 				"No",
@@ -94,10 +94,10 @@ export default async function (args){
 			filter: answer => normalizeOutputPaths(answer),
 		},
 	])
-	.then(answers => allAnswers = deepmerge(allAnswers, answers))
+	.then(answers => allAnswers = deepMerge(allAnswers, answers))
 	.catch(error => handleError(error));
 
-	global.ewaConfig.inputPath = allAnswers.inputPath;
+	global.ewabConfig.inputPath = allAnswers.inputPath;
 
 	const outputFolderName = decideOutputFolderName(allAnswers.inputPath);
 
@@ -106,7 +106,7 @@ export default async function (args){
 			name: "config.outputPath",
 			type: "list",
 			prefix: p, suffix: s,
-			message: `When EWA is done, it needs a folder to save the completed webapp in. It wants to call that folder '${outputFolderName}', is that cool?\n  ${chalk.dim(fs.pathExists(path.join(global.ewaConfig.rootPath, outputFolderName)) ? "A folder already exists at this path. It will be overwritten." : "There is no folder at this path right now, so there's no risk something wil be overwritten.")}`,
+			message: `When EWAB is done, it needs a folder to save the completed webapp in. It wants to call that folder '${outputFolderName}', is that cool?\n  ${chalk.dim(fs.pathExists(path.join(global.ewabConfig.rootPath, outputFolderName)) ? "A folder already exists at this path. It will be overridden." : "There is no folder at this path right now, so there's no risk something wil be overridden.")}`,
 			choices: [
 				"Yes!",
 				"No, I want to call it something else",
@@ -121,7 +121,7 @@ export default async function (args){
 			name: "config.outputPath",
 			type: "input",
 			prefix: p, suffix: s,
-			message: `Alright, then what should we call it?\n  ${chalk.dim("If a folder already exists at the path you choose, it will be overwritten.")}`,
+			message: `Alright, then what should we call it?\n  ${chalk.dim("If a folder already exists at the path you choose, it will be overridden.")}`,
 			default: "public",
 			filter: rawPath => {
 				const normalizedPath = normalizeOutputPaths(rawPath);
@@ -130,7 +130,7 @@ export default async function (args){
 			},
 		},
 		{
-			when: () => Boolean(glob.sync("**/*.{html,htm}", {cwd: path.join(process.cwd(), allAnswers.inputPath), absolute: true}).length === 0),
+			when: async () => Boolean((await glob("**/*.{html,htm}", {cwd: path.join(process.cwd(), allAnswers.inputPath), absolute: true})).length === 0),
 			name: "addScaffolding",
 			type: "list",
 			prefix: p, suffix: s,
@@ -152,7 +152,7 @@ export default async function (args){
 			},
 		},
 	])
-	.then(answers => allAnswers = deepmerge(allAnswers, answers))
+	.then(answers => allAnswers = deepMerge(allAnswers, answers))
 	.catch(error => handleError(error));
 
 	allAnswers.config.fileExceptions = allAnswers.config.fileExceptions || [];
@@ -179,9 +179,9 @@ export default async function (args){
 
 	await prompt([
 		{
-			when: () => {
+			when: async () => {
 				const foundEnds = [];
-				for(const filePath of glob.sync("**/*[-_.]{dev.*,dev,src.*,src,source.*,source}", {cwd: path.join(process.cwd(), allAnswers.inputPath), absolute: true})){
+				for(const filePath of await glob("**/*[-_.]{dev.*,dev,src.*,src,source.*,source}", {cwd: path.join(process.cwd(), allAnswers.inputPath), absolute: true})){
 					const fileEnd = filePath.match(/(?<fileEnd>[-_.](?:dev|src|source)(?:\..*|$))/ui).groups.fileEnd;
 					if(!foundEnds.includes(fileEnd)) foundEnds.push(fileEnd);
 				}
@@ -210,9 +210,9 @@ export default async function (args){
 			},
 		},
 		{
-			when: () => {
+			when: async () => {
 				const foundExtensions = [];
-				for(const filePath of glob.sync("**/*{.pcss,.scss,.less,.ts,.tsx,config,rc}", {cwd: path.join(process.cwd(), allAnswers.inputPath), absolute: true})){
+				for(const filePath of await glob("**/*{.pcss,.scss,.less,.ts,.tsx,config,rc}", {cwd: path.join(process.cwd(), allAnswers.inputPath), absolute: true})){
 					const extension = path.extname(filePath);
 					if(!foundExtensions.includes(extension)) foundExtensions.push(extension);
 				}
@@ -226,7 +226,7 @@ export default async function (args){
 			name: "removeExtensions",
 			type: "checkbox",
 			prefix: p, suffix: s,
-			message: () => `I noticed that your project contains some build files. (${allAnswers.unsupportedExtensions.join(", ")})\n  Maybe you have already taken this into account, but just remember that EWA doesn't support any of these files.\n  If you have a build step, I would recommend running it before EWA, then posting the output into EWAs input folder.\n  \n  Should I set up rules that remove these files automatically? Choose the ones that should be removed.`,
+			message: () => `I noticed that your project contains some build files. (${allAnswers.unsupportedExtensions.join(", ")})\n  Maybe you have already taken this into account, but just remember that EWAB doesn't support any of these files.\n  If you have a build step, I would recommend running it before EWAB, then posting the output into EWABs input folder.\n  \n  Should I set up rules that remove these files automatically? Choose the ones that should be removed.`,
 			choices: () => allAnswers.unsupportedExtensions,
 			filter: choices => {
 				for(const choice of choices){
@@ -244,7 +244,7 @@ export default async function (args){
 			name: "config.icons.add",
 			type: "list",
 			prefix: p, suffix: s,
-			message: `Should EWA handle your icons for you?\n  ${chalk.dim("EWA will take your icon, render it in a bunch of different sizes, then use those in the final app.")}`,
+			message: `Should EWAB handle your icons for you?\n  ${chalk.dim("EWAB will take your icon, render it in a bunch of different sizes, then use those in the final app.")}`,
 			choices: [
 				"Yes",
 				"No",
@@ -255,7 +255,7 @@ export default async function (args){
 			name: "config.files.minify",
 			type: "list",
 			prefix: p, suffix: s,
-			message: `Should EWA minify your files?\n  ${chalk.dim("EWA will minify most files, such as HTML, CSS, JS, SVG.")}`,
+			message: `Should EWAB minify your files?\n  ${chalk.dim("EWAB will minify most files, such as HTML, CSS, JS, SVG.")}`,
 			choices: [
 				"Yes",
 				"No",
@@ -278,7 +278,7 @@ export default async function (args){
 			name: "useDefaultConfigName",
 			type: "list",
 			prefix: p, suffix: s,
-			message: `That was all! I will save your preferences in a file called ".ewaconfig.js". Is that cool?\n  ${chalk.dim("If you choose a different name, EWA won't be able to find the file automatically.")}`,
+			message: `That was all! I will save your preferences in a file called ".${defaultConfigName}.js". Is that cool?\n  ${chalk.dim("If you choose a different name, EWAB won't be able to find the file automatically.")}`,
 			choices: [
 				"Yes!",
 				"No, I want to call it something else",
@@ -290,16 +290,16 @@ export default async function (args){
 			name: "configName",
 			type: "input",
 			prefix: p, suffix: s,
-			message: `Alright, what should I call it then?\n  ${chalk.dim(`When you call EWA, you'll have to use 'easy-webapp --config-name "yourconfigname"' for it to read your preferences.`)}`,
-			default: "ewaconfig",
+			message: `Alright, what should I call it then?\n  ${chalk.dim(`When you call EWAB, you'll have to use 'easy-web-app-builder --config-name "yourconfigname"' for it to read your preferences.`)}`,
+			default: defaultConfigName,
 		},
 
 	])
-	.then(answers => allAnswers = deepmerge(allAnswers, answers))
+	.then(answers => allAnswers = deepMerge(allAnswers, answers))
 	.catch(error => handleError(error));
 
 	const configFile = `\n/**\n * @file\n * Configuration script for eay-webapp.\n */\n\nexport default ${JSON.stringify(allAnswers.config, null, 2)}\n`;
-	await fs.writeFile(path.join(process.cwd(), allAnswers.useDefaultConfigName ? ".ewaconfig.js" : `.${allAnswers.configName}.js`), configFile);
+	await fs.writeFile(path.join(process.cwd(), allAnswers.useDefaultConfigName ? `.${defaultConfigName}.js` : `.${allAnswers.configName}.js`), configFile);
 
 
 }
@@ -308,7 +308,7 @@ function handleError(error){
 	if(error.isTtyError){
 		console.log("Sorry, but your terminal doesn't support TTY, which is required for this wizard to work. See this list to find a supported terminal: https://github.com/SBoudrias/Inquirer.js#support");
 	}else{
-		console.log(chalk.bgRed.black("  Sorry, something went wrong. You are welcome to file a bug with the following information at: https://github.com/atjn/easy-webapp/issues/new/choose  "));
+		console.log(chalk.bgRed.black("  Sorry, something went wrong. You are welcome to file a bug with the following information at: https://github.com/atjn/easy-web-app-builder/issues/new/choose  "));
 		console.error(error);
 	}
 };

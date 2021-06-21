@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs-extra";
 
 
-import { EWASourcePath } from "../src/compat.js";
+import { ewabSourcePath } from "../src/compat.js";
 import { getRootFileConfig } from "../src/config.js";
 
 export default async function ({type, inputPath}){
@@ -15,13 +15,13 @@ export default async function ({type, inputPath}){
 
 	switch(type){
 		case "all":
-			await fs.copy(path.join(EWASourcePath, "lib/scaffolding"), inputPath);
+			await fs.copy(path.join(ewabSourcePath, "lib/scaffolding"), inputPath);
 			break;
 		case "html":
-			await fs.copyFile(path.join(EWASourcePath, "lib/scaffolding/index.html"), path.join(inputPath, "index.html"));
+			await fs.copyFile(path.join(ewabSourcePath, "lib/scaffolding/index.html"), path.join(inputPath, "index.html"));
 			break;
 		case "manifest":
-			await fs.copyFile(path.join(EWASourcePath, "lib/scaffolding/manifest.json"), path.join(inputPath, "manifest.json"));
+			await fs.copyFile(path.join(ewabSourcePath, "lib/scaffolding/manifest.json"), path.join(inputPath, "manifest.json"));
 			break;
 	}
 

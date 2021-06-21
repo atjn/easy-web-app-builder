@@ -1,4 +1,4 @@
-/* global ewaConfig */
+/* global ewabConfig */
 
 /**
  * @file
@@ -7,18 +7,19 @@
 
 import path from "path";
 import minimatch from "minimatch";
-import deepmerge from "deepmerge";
 import objectHash from "object-hash";
+import joiBase from "joi";
 
-import { fileExists } from "./tools.js";
-import { log } from "./log.js";
+import { fileExists, deepMerge } from "./tools.js";
+import { log, logInterfaces, defaultInterface } from "./log.js";
 import { importAny } from "./compat.js";
 
-const cwd = process.cwd();
+export const defaultAlias = "ewab";
+export const defaultConfigName = "ewabconfig";
 
 
 /**
- * Generates the main config object which determines how easy-webapp should operate.
+ * Generates the main config object which determines how easy-web-app-builder should operate.
  * 
  * @param	{object}	callConfig	- The call config object (CLI options).
  * 
@@ -27,20 +28,33 @@ const cwd = process.cwd();
  */
 async function generateMain(callConfig){
 
-	validate(callConfig, "call");
-	const rootPath = callConfig.rootPath || cwd;
-	
-	const rootFileConfig = await getRootFileConfig(rootPath, callConfig.configName);
-	validate(rootFileConfig, "main");
+	let configFromCall;
+	try{
+		configFromCall = JSON.parse(callConfig.config);
+	}catch(error){
+		log("error", "Was unable to read the config object passed in the CLI, it seems to be invalid.");
+	}
 
-	log("Merging all config sources into the main config object");
+	log.warmup(configFromCall.interface);
 
-	const mainConfig = deepmerge.all([
-		defaults || {},
-		rootFileConfig || {},
-		mapCall(callConfig) || {},
-		{"rootPath": rootPath},
+	const configFromFile = await getRootFileConfig(callConfig.rootPath, callConfig.configName);
+
+	log("Validating and combining config objects");
+
+	await Promise.all([
+		validateConfig(configFromCall, "CLI config object"),
+		validateConfig(configFromFile, "root config file"),
 	]);
+
+	const mainConfig = await validateConfig(deepMerge(
+		configFromFile,
+		configFromCall,
+	), "combined config object");
+
+	log.warmup(mainConfig.interface);
+
+	mainConfig.rootPath = callConfig.rootPath;
+	mainConfig.cachePath = mainConfig.cachePath || path.join(mainConfig.rootPath, `.${mainConfig.alias}-cache`);
 
 	mainConfig.fileExceptions.push(
 		{
@@ -63,11 +77,9 @@ async function generateMain(callConfig){
 		},
 	);
 
-	mainConfig.cachePath = mainConfig.cachePath || path.join(mainConfig.rootPath, `.${mainConfig.alias}-cache`);
-
 	mainConfig.hash = objectHash(mainConfig);
 
-	if(mainConfig.alias !== defaults.alias) log(`NOTE: The EWA alias has been changed to '${mainConfig.alias}'. If this alias collides with other names in the project, it could cause weird behavior.`);
+	if(mainConfig.alias !== defaultAlias) log(`NOTE: The EWAB alias has been changed to '${mainConfig.alias}'. If this alias collides with other names in the project, it could cause weird behavior.`);
 
 	return mainConfig;
 
@@ -83,62 +95,27 @@ async function generateMain(callConfig){
  */
 function generateForFile(filePath){
 
-	const localFilePath = path.relative(ewaConfig.workPath, filePath);
+	const localFilePath = path.relative(ewabConfig.workPath, filePath);
 
 	let exceptionsConfig = {};
 
-	for(const exception of ewaConfig.fileExceptions){
+	for(const exception of ewabConfig.fileExceptions){
 
 		if(minimatch(localFilePath, exception.glob)){
 
-			exceptionsConfig = deepmerge(exceptionsConfig, exception);
+			exceptionsConfig = deepMerge(exceptionsConfig, exception);
 			delete exceptionsConfig.glob;
 
 		}
 
 	}
 
-	return deepmerge(ewaConfig, exceptionsConfig);
-
-}
-
-
-/**
- * Many of the CLI options directly affect options in the config object.
- * This function maps the CLI options to a config object so they can be merged with the active config object.
- * 
- * @param	{object}	callConfig		- The CLI call configuration.
- * 
- * @returns	{object}					- A config object.
- * 
- */
-function mapCall(callConfig){
-
-	const directAllowList = [
-		"interface",
-		"useCache",
-	];
-	const scopedAllowList = [
-		//rootPath is handled when the main config is generated
-		"configName",
-	];
-
-
-	const config = {call: {}};
-
-	for(const key of directAllowList){
-		if(callConfig[key] !== undefined) config[key] = callConfig[key];
-	}
-	for(const key of scopedAllowList){
-		if(callConfig[key] !== undefined) config.call[key] = callConfig[key];
-	}
-
-	return config;
+	return deepMerge(ewabConfig, exceptionsConfig);
 
 }
 
 /**
- * Tries to find an easy-webapp config file in a given folder.
+ * Tries to find an easy-web-app-builder config file in a given folder.
  * 
  * @param	{string}	folderPath		- Absolute path to folder.
  * @param	{string}	[configName]	- Specify a custom config file name (with/without extension and leading dot).
@@ -146,7 +123,7 @@ function mapCall(callConfig){
  * @returns	{object}					- An array of string rules.
  * 
  */
-export async function getRootFileConfig(folderPath, configName = "ewaconfig"){
+export async function getRootFileConfig(folderPath, configName = defaultConfigName){
 
 	log(`Trying to find config file '${configName}' in project root folder`);
 
@@ -162,7 +139,13 @@ export async function getRootFileConfig(folderPath, configName = "ewaconfig"){
 
 			log(`Found a config file at '${path.relative(folderPath, filePath)}', attempting to read it`);
 
-			return await importAny(filePath);
+			try{
+
+				return await importAny(filePath);
+
+			}catch(error){
+				log("error", `Was unable to read the config file '${path.relative(folderPath, filePath)}', it seems to be invalid.`);
+			}
 
 		}
 	}
@@ -171,99 +154,165 @@ export async function getRootFileConfig(folderPath, configName = "ewaconfig"){
 
 /**
  * Validates a config object. This method will not catch everything, but it will catch common issues with wrong types and misspellings.
+ * If a value is not present, the default value is set.
  * 
- * @param	{object}			config	- The config object to validate.
- * @param	{"main"|"call"}		type	- Which type of config it is.
+ * @param {object}	config	- The config object to validate.
+ * @param {string}	source	- Text description of where the config object is coming from, used for logging.
  * 
- * @returns	{true | Error}				- If the config object passed validation.
+ * @returns {Promise<object>} - The validated config object.
  * 
  */
-function validate(config, type){
-
-	log(`Validating ${type === "call" ? "the" : "a"} ${type} config`);
-
-	if(type === "call"){
-		return Boolean(config);
+async function validateConfig(config, source){
+	try{
+		config = await configOptions.validateAsync(config, {abortEarly: false});
+	}catch(error){
+		log("error", `Found some unsupported options in the ${source}: ${error.details.map(detail => detail.message).join(", ")}.`);
 	}
-
-	return Boolean(config);
-
-	/*
-	
-	const {Schema} = require("validate");
-
-	const mask = new Schema({
-
-	});
-	
-	*/
-
+	log(`The ${source} seems to be valid`);
+	return config;
 }
 
-/**
- * The default config object which defines much of easy-webapps default behavior.
- */
-const defaults = {
+const joi = joiBase.defaults(schema => {
+	switch (schema.type) {
+		case "array":
+			return schema.default([]);
+		case "object":
+			return schema.default();
+		default:
+			return schema;
+	}
+});
 
-	alias: "ewa",
-	configName: "ewaconfig",
-	interface: "modern",
-	useCache: true,
+const supportedImageExtensions = joi.string().valid("webp", "jxl", "avif", "jpg", "png");
 
-	inputPath: undefined,
-	outputPath: undefined,
 
-	manifestPath: undefined,
-	
-	icons: {
-		add: true,
-		source: "",
-		list: [],
-		blockList: [],
-		mergeMode: {
-			index: "override",
-			manifest: "override",
-		},
-	},
+const globalOptions = {
 
-	serviceworker: {
-		add: true,
-		clean: false,
-		experience: "online",
-		debug: false,
-		networkTimeoutSeconds: 4,
-		displayUpdateButton: true,
-		displayOfflineBanner: true,
-		customRules: [
+	alias: joi.string().default(defaultAlias),
 
-		],
-	},
+	interface: joi.string().default(defaultInterface)
+		.valid(...Object.keys(logInterfaces)),
 
-	files: {
-		minify: true,
-		addSourceMaps: true,
-		directOptions: {},
-	},
+	useCache: joi.boolean().default(true),
 
-	images: {
-		minify: true,
-		convert: true,
-		updateReferences: true,
-		keepOriginalFile: true,
-		targetExtension: "webp",
-		targetExtensions: [ "webp", "jxl" ],
-		resize: {
-			auto: true,
-			fallbackSize: undefined,
-			maxSize: 2560,
-			sizes: "",
-			addSizesTagToImg: true,
-			customSizes: [],
-		},
-	},
+	inputPath: joi.string(),
 
-	fileExceptions: [],
-	
+	outputPath: joi.string(),
+
+	manifestPath: joi.string(),
+
+	icons: joi.object({
+
+		add: joi.boolean().default(true),
+
+		source: joi.string(),
+
+		list: joi.array().items(
+			joi.string(),
+		),
+
+		blockList: joi.array().items(
+			joi.string(),
+		),
+
+		mergeMode: joi.object({
+
+			index: joi.string().default("override")
+				.valid("override", "combine"),
+
+			manifest: joi.string().default("override")
+			.valid("override", "combine"),
+
+		}),
+
+	}),
+
+	serviceworker: joi.object({
+
+		add: joi.boolean().default(false),
+
+		clean: joi.boolean().default(false),
+		
+		experience: joi.string()
+			.valid("online", "app"),
+
+		debug: joi.boolean().default(false),
+
+		networkTimeoutSeconds: joi.number().positive().default(4),
+
+		displayUpdateButton: joi.boolean().default(true),
+
+		displayOfflineBanner: joi.boolean().default(true),
+
+		customRules:  joi.array().items(
+			joi.object(),
+		),
+
+	}),
+
 };
+
+const localOptions = {
+
+	files: joi.object({
+
+		minify: joi.boolean().default(true),
+
+		addSourceMaps: joi.boolean().default(true),
+
+		directOptions: joi.object(),
+
+	}),
+
+	images: joi.object({
+
+		minify:				joi.boolean().default(true),
+		convert:			joi.boolean().default(true),
+		updateReferences:	joi.boolean().default(true),
+		keepOriginalFile:	joi.boolean().default(true),
+
+		targetExtension: supportedImageExtensions.default("webp"),
+
+		targetExtensions: joi.array().items(
+			supportedImageExtensions,
+		),
+
+		resize: joi.object({
+
+			auto: joi.boolean().default(true),
+
+			fallbackSize: joi.number().integer().positive(),
+
+			maxSize: joi.number().integer().positive().default(2560),
+
+			sizes: joi.string(),
+
+			addSizesTagToImg: joi.boolean().default(true),
+
+			customSizes: joi.array().items(
+				joi.object({
+					width: joi.number().integer().positive(),
+					height: joi.number().integer().positive(),
+				}),
+			),
+
+		}),
+	}),
+
+};
+
+export const configOptions = joi.object({
+
+	...globalOptions,
+	...localOptions,
+
+	fileExceptions: joi.array().items(
+		joi.object({
+			glob: joi.string(),
+			...localOptions,
+		}),
+	),
+
+});
 
 export default { generateMain, generateForFile };
