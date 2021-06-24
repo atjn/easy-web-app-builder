@@ -10,12 +10,25 @@ import minimatch from "minimatch";
 import objectHash from "object-hash";
 import joiBase from "joi";
 
-import { fileExists, deepMerge } from "./tools.js";
-import { log, logInterfaces, defaultInterface } from "./log.js";
-import { importAny } from "./compat.js";
+import { fileExists, deepMerge, importAny } from "./tools.js";
+import { log } from "./log.js";
 
-export const defaultAlias = "ewab";
-export const defaultConfigName = "ewabconfig";
+/**
+ * Contains a few defaults that are used across the package.
+ */
+export const defaults = {
+	alias: "ewab",
+	configName: "ewabconfig",
+	interface: "modern",
+};
+
+export const logInterfaces = {
+	modern: "Default, makes the output look nice.",
+	minimal: "Will only show what it is currently doing. The only logs persisted after a completed runs are any warnings encountered.",
+	basic: "Outputs a simple line-by-line log.",
+	none: "No output at all",
+	debug: "Outputs a wealth of information that can help figure out why EWAB is that *that thing*",
+};
 
 
 /**
@@ -79,7 +92,7 @@ async function generateMain(callConfig){
 
 	mainConfig.hash = objectHash(mainConfig);
 
-	if(mainConfig.alias !== defaultAlias) log(`NOTE: The EWAB alias has been changed to '${mainConfig.alias}'. If this alias collides with other names in the project, it could cause weird behavior.`);
+	if(mainConfig.alias !== defaults.alias) log(`NOTE: The EWAB alias has been changed to '${mainConfig.alias}'. If this alias collides with other names in the project, it could cause weird behavior.`);
 
 	return mainConfig;
 
@@ -123,7 +136,7 @@ function generateForFile(filePath){
  * @returns	{object}					- An array of string rules.
  * 
  */
-export async function getRootFileConfig(folderPath, configName = defaultConfigName){
+export async function getRootFileConfig(folderPath, configName = defaults.configName){
 
 	log(`Trying to find config file '${configName}' in project root folder`);
 
@@ -188,28 +201,28 @@ const supportedImageExtensions = joi.string().valid("webp", "jxl", "avif", "jpg"
 
 const globalOptions = {
 
-	alias: joi.string().default(defaultAlias),
+	alias: joi.string().default(defaults.alias).description("the name EWAB uses when adding elements to the web app"),
 
-	interface: joi.string().default(defaultInterface)
+	interface: joi.string().default(defaults.interface).description("how progress is logged to the console")
 		.valid(...Object.keys(logInterfaces)),
 
-	useCache: joi.boolean().default(true),
+	useCache: joi.boolean().default(true).description("if a cache should be used to speed up consecutive runs"),
 
-	inputPath: joi.string(),
+	inputPath: joi.string().description("path to the input folder"),
 
-	outputPath: joi.string(),
+	outputPath: joi.string().description("path to the output folder"),
 
-	manifestPath: joi.string(),
+	manifestPath: joi.string().description("path to the manifest, relative to the input folder"),
 
 	icons: joi.object({
 
-		add: joi.boolean().default(true),
+		add: joi.boolean().default(true).description("if custom icons should be added to the app"),
 
-		source: joi.string(),
+		source: joi.string().description("path to the icon to generate all other icons from"),
 
 		list: joi.array().items(
 			joi.string(),
-		),
+		).description("list of all icons currently in the project"),
 
 		blockList: joi.array().items(
 			joi.string(),
@@ -269,7 +282,7 @@ const localOptions = {
 		minify:				joi.boolean().default(true),
 		convert:			joi.boolean().default(true),
 		updateReferences:	joi.boolean().default(true),
-		keepOriginalFile:	joi.boolean().default(true),
+		keepOriginal:		joi.boolean().default(true),
 
 		targetExtension: supportedImageExtensions.default("webp"),
 
@@ -297,6 +310,9 @@ const localOptions = {
 			),
 
 		}),
+
+		directOptions: joi.object(),
+
 	}),
 
 };
@@ -308,10 +324,10 @@ export const configOptions = joi.object({
 
 	fileExceptions: joi.array().items(
 		joi.object({
-			glob: joi.string(),
+			glob: joi.string().description("glob pattern to match file with"),
 			...localOptions,
 		}),
-	),
+	).description("alter the settings for certain files"),
 
 });
 

@@ -1,4 +1,4 @@
-/* global ewabConfig ewabObjects */
+/* global ewabConfig ewabRuntime */
 
 /**
  * @file
@@ -118,7 +118,7 @@ async function cleanUnusedFiles(){
 
 	for(const itemPath of getFolderFiles(path.join(ewabConfig.cachePath, "/items"))){
 
-		if(!ewabObjects.minifiedHashes.reduce((used, hash) => Boolean(itemPath.includes(hash) ? true : used))){
+		if(!ewabRuntime.minifiedHashes.reduce((used, hash) => Boolean(itemPath.includes(hash) ? true : used))){
 			log(`Removing minified item '${itemPath}' from cache, as it is no longer used`);
 			cacheRemovals.push(
 				fs.remove(path.join(ewabConfig.cachePath, "/items", itemPath)),

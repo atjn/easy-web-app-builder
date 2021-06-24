@@ -1,17 +1,14 @@
-/* global ewabConfig ewabObjects */
+/* global ewabConfig ewabRuntime */
 
 /**
  * @file
  * Collection of file minifiers / removers to be used by main function.
  * Input is always an absolute file path, output is saved to cache with a hash-reference to the original file.
- * All functions will return how many bytes the minification saved.
  */
 
 import path from "path";
 import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
-import getItemSize from "get-folder-size";
-import prettyBytes from "pretty-bytes";
 import { log, bar } from "./log.js";
 import { fileExists, getExtension, resolveURL, deepClone } from "./tools.js";
 import config from "./config.js";
@@ -37,9 +34,9 @@ import asyncPool from "tiny-async-pool";
 export default minify;
 
 /**
- * Hi there.
+ * Minifies an aspect of the webapp. This can range from compressing images to deleting development-only files.
  * 
- * @param	{"remove"|"images"|"files"}	type 
+ * @param {"remove"|"images"|"files"}	type	- What type of minification to run.
  */
 async function minify(type){
 
@@ -89,7 +86,7 @@ async function minify(type){
 	global.imagePool = type === "images" ? new ImagePool() : undefined;
 
 	const itemProcessingQueue = [];
-	const itemProcessingResults = [];
+	let completedItemProcesses = 0;
 
 	for(const itemPath of await glob("**/*", {cwd: ewabConfig.workPath, absolute: true})){
 
@@ -133,18 +130,20 @@ async function minify(type){
 		itemProcessingQueue,
 		async item => {
 			await processItem(item)
-			.then(result => {
-				itemProcessingResults.push(result);
-				bar(itemProcessingResults.length / itemProcessingQueue.length);
+			.then(() => {
+				completedItemProcesses++;
+				bar(completedItemProcesses / itemProcessingQueue.length);
 				return;
 			});
 		},
 	);
 
+	if(type === "images") global.imagePool.close();
+
 	if(itemProcessingQueue.length === 0){
 		bar.hide();
 	}else{
-		bar.end(`${processName.action.past} ${itemProcessingQueue.length} ${itemProcessingQueue.length === 1 ? processName.item.singular : processName.item.plural}, saving ${prettyBytes(itemProcessingResults.reduce((a, b) => a + b, 0) / 1000)}`);
+		bar.end(`${processName.action.past} ${itemProcessingQueue.length} ${itemProcessingQueue.length === 1 ? processName.item.singular : processName.item.plural}`);
 	}
 
 	if(type === "images" && ewabConfig.images.updateReferences){
@@ -153,22 +152,22 @@ async function minify(type){
 
 	}
 
-	if(type === "images"){
-		global.imagePool.close();
-	}
-
 }
 
+/**
+ * Processes a single file for minification.
+ * 
+ * @param {*}	item	- A custom object containing information about the item to be processed. 
+ */
 async function processItem(item){
 
 	const itemRelativePath = path.relative(ewabConfig.workPath, item.path);
 
 	try{
 
-		const originalSize = await getItemSize.loose(item.path);
 		const originalHash = (await folderHash(item.path, { "encoding": "hex" })).hash;
 
-		ewabObjects.minifiedHashes.push(originalHash);
+		ewabRuntime.minifiedHashes.push(originalHash);
 
 		switch(item.type){
 
@@ -176,10 +175,10 @@ async function processItem(item){
 
 				log(`Removing '${itemRelativePath}'`);
 				await fs.remove(item.path);
-				return originalSize;
+
+				return;
 
 			}
-
 
 			case "files": {
 
@@ -326,7 +325,7 @@ async function processItem(item){
 					await fs.copy(cachedFileMapPath, fileMapPath);
 				}
 
-				return originalSize - fs.statSync(item.path).size;
+				return;
 			
 			}
 
@@ -374,39 +373,59 @@ async function processItem(item){
 
 							for(const targetExtension of targetExtensions){
 
-								let engine;
+								const engine = {};
 
 								switch(targetExtension){
-									case "jxl":
-										options.jxl = {};
+									case "png":
+										engine.name = "oxipng";
 										break;
 									case "avif":
-									case "webp":
-										options[targetExtension] = {};
+										engine.options = {
+											...(await image.decoded).lossless ?
+												{
+													cqLevel: 0,
+													subsample: 3,
+												} :
+												{
+													cqLevel: 33,
+													subsample: 1,
+												},
+										};
 										break;
-									case "png":
-										options.oxipng = {};
+									case "webp":
+										engine.options = {
+											lossless: (await image.decoded).lossless ? 1 : 0,
+										};
 										break;
 									case "jpg":
-										options.mozjpeg = {};
+										engine.name = "mozjpeg";
+										engine.options = {
+											quality: (await image.decoded).lossless ? 100 : 75,
+											progressive: true,
+										};
+										break;
+									case "jxl":
+										engine.options = {
+											quality: (await image.decoded).lossless ? 100 : 75,
+											progressive: true,
+										};
 										break;
 									default:
 										throw new Error(`Does not support minifying to image with extension "${targetExtension}"`);
 								}
 								log(`Minifying '${itemRelativePath}' to a ${size.width}x${size.height} ${targetExtension} image`);
 
-								options[engine] = {};
+								options[engine.name || targetExtension] = {
+									...engine.options,
+									...item.fileConfig.images.directOptions[targetExtensions],
+								};
 
 							}
 
 							await image.encode(options);
 							
 							await Promise.all([ ...Object.values(image.encodedWith) ].map(async encodedImage => {
-								/*
-								if(!minifiedImage){
-									throw new Error(`Unexpected error while minifying to "${targetExtension}"`);
-								}
-								*/
+								if(!(await encodedImage)?.extension || !(await encodedImage)?.binary) throw new Error(`Unexpected error while minifying image`);
 								return await fs.writeFile(`${cachedImagePath}.${(await encodedImage).extension}`, (await encodedImage).binary);
 							}));
 
@@ -426,6 +445,10 @@ async function processItem(item){
 					
 				}
 
+				if(!item.fileConfig.images.keepOriginal) await fs.remove(item.path);
+
+				return;
+
 			}
 
 		}
@@ -441,10 +464,12 @@ async function processItem(item){
 
 	}
 
-	return 0;
-
 }
 
+/**
+ * Updates references to images in other documents, such as HTTP and CSS.
+ * This is not perfect, it won't catch every link.
+ */
 async function updateImageReferences(){
 
 	for(const sheetPath of await glob("**/*.css", {cwd: ewabConfig.workPath, absolute: true})){
@@ -502,34 +527,34 @@ async function updateImageReferences(){
 		if(html?.window?.document){
 
 			for(const img of html.window.document.querySelectorAll("picture > img")){
-
-				if(true){
 					
-					const srcPath = resolveURL(
-						ewabConfig.workPath,
-						markupPath,
-						img.src || "",
-					);
-					const srcsetPath = resolveURL(
-						ewabConfig.workPath,
-						markupPath,
-						img.srcset || "",
-					);
+				const srcPath = resolveURL(
+					ewabConfig.workPath,
+					markupPath,
+					img.src || "",
+				);
+				const srcsetPath = resolveURL(
+					ewabConfig.workPath,
+					markupPath,
+					img.srcset || "",
+				);
 
-					let imagePath;
-					let srcType;
+				let imagePath;
+				let srcType;
 
-					if(fileExists(srcsetPath)){
-						imagePath = srcsetPath;
-						srcType = "srcset";
-					}else if(fileExists(srcPath)){
-						imagePath = srcPath;
-						srcType = "src";
-					}else{
-						continue;
-					}
-					const fileConfig = config.generateForFile(imagePath);
-					const url = img[srcType];
+				if(fileExists(srcsetPath)){
+					imagePath = srcsetPath;
+					srcType = "srcset";
+				}else if(fileExists(srcPath)){
+					imagePath = srcPath;
+					srcType = "src";
+				}else{
+					continue;
+				}
+				const fileConfig = config.generateForFile(imagePath);
+				const url = img[srcType];
+
+				if(fileConfig.images.updateReferences){
 
 					for(const targetExtension of fileConfig.images.targetExtensions){
 						const newURL = url.replace(/\.\w+$/u, `.${targetExtension}`);
@@ -548,6 +573,7 @@ async function updateImageReferences(){
 					}
 
 				}
+
 			}
 
 			for(const img of html.window.document.querySelectorAll("img, picture > source")){
@@ -593,6 +619,15 @@ async function updateImageReferences(){
 
 }
 
+/**
+ * Processes the EWAB resize config for an image.
+ * Adds a list of sizes the image should be resized to.
+ * 
+ * @param {object}	resizeConfig	- The image resizeConfig from its fileConfig.
+ * @param {object}	originalSize	- The original size of the image.
+ * 
+ * @returns {object} - The processed resizeConfig.
+ */
 function processResizeSettings(resizeConfig, originalSize){
 
 	resizeConfig.resizeTo = [];
@@ -673,6 +708,14 @@ function processResizeSettings(resizeConfig, originalSize){
 
 }
 
+/**
+ * Takes a specific image size, and makes it fit inside a given set of constraints, while preserving aspect ratio.
+ * 
+ * @param {object}	imageSize			- The current image size.
+ * @param {object}	imageConstraints	- The constraints.
+ * 
+ * @returns {object} - The new image size, fitted to the constraints.
+ */
 function fitImageSizeToConstraints(imageSize, imageConstraints){
 
 	const resizeRatio = Math.min(

@@ -1,18 +1,35 @@
 ```js
 {
+  //the name EWAB uses when adding elements to the web app
   alias: String: "ewab"
-  configName: String: "ewabconfig"
-  interface: String: "modern" ("modern", "minimal", "basic", "debug")
+  
+  //how progress is logged to the console
+  interface: String: "modern" ("modern", "minimal", "basic", "none", "debug")
+  
+  //if a cache should be used to speed up consecutive runs
   useCache: Boolean: true
+  
+  //path to the input folder
   inputPath: String
+  
+  //path to the output folder
   outputPath: String
+  
+  //path to the manifest, relative to the input folder
   manifestPath: String
+  
   icons: {
+    //if custom icons should be added to the app
     add: Boolean: true
+    
+    //path to the icon to generate all other icons from
     source: String
+    
+    //list of all icons currently in the project
     list: [
       String
     ],
+    
     blockList: [
       String
     ],
@@ -42,7 +59,7 @@
     minify: Boolean: true
     convert: Boolean: true
     updateReferences: Boolean: true
-    keepOriginalFile: Boolean: true
+    keepOriginal: Boolean: true
     targetExtension: String: "webp" ("webp", "jxl", "avif", "jpg", "png")
     targetExtensions: [
       String ("webp", "jxl", "avif", "jpg", "png")
@@ -60,10 +77,14 @@
         },
       ],
     },
+    directOptions: Object
   },
+  //alter the settings for certain files
   fileExceptions: [
     {
+      //glob pattern to match file with
       glob: String
+      
       files: {
         minify: Boolean: true
         addSourceMaps: Boolean: true
@@ -73,7 +94,7 @@
         minify: Boolean: true
         convert: Boolean: true
         updateReferences: Boolean: true
-        keepOriginalFile: Boolean: true
+        keepOriginal: Boolean: true
         targetExtension: String: "webp" ("webp", "jxl", "avif", "jpg", "png")
         targetExtensions: [
           String ("webp", "jxl", "avif", "jpg", "png")
@@ -91,9 +112,11 @@
             },
           ],
         },
+        directOptions: Object
       },
     },
   ],
+  
 },
 ```
 

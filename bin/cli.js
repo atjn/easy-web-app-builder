@@ -10,8 +10,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
 import ewab from "../src/ewab.js";
-import { logInterfaces } from "../src/log.js";
-import { defaultConfigName } from "../src/config.js";
+import { defaults } from "../src/config.js";
 
 import setup from "./setup.js";
 import scaffold from "./scaffold.js";
@@ -26,12 +25,12 @@ const args = yargs(hideBin(process.argv))
 	})
 	.option("config-name", {
 		type: "string",
-		default: defaultConfigName,
+		default: defaults.configName,
 		description: "Define an alternative name for the EWAB config file.",
 	})
 	.option("config", {
 		type: "string",
-		default: {},
+		default: "{}",
 		description: "Pass a JSON config object. Values defined here will override the values in the config file.",
 	})
 	.command(["setup", "wizard", "guide", "initialize", "init"], "Opens a wizard to help set up easy-web-app-builder.")

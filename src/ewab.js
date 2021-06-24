@@ -4,6 +4,8 @@
  * This is the main file/function for the entire package. It mostly just calls other functions in the correct order.
  */
 
+import { ewabSourcePath } from "./tools.js";
+
 import { log, bar } from "./log.js";
 import config from "./config.js";
 import cache from "./cache.js";
@@ -11,6 +13,14 @@ import files from "./files.js";
 import minify from "./minify.js";
 import icons from "./icons.js";
 import serviceworker from "./serviceworker.js";
+
+/**
+ * Contains some shared objects and defaults that are used across this package.
+ */
+export const ewabRuntime = {
+	sourcePath: ewabSourcePath,
+	minifiedHashes: [],
+};
 
 
 /**
@@ -21,15 +31,10 @@ import serviceworker from "./serviceworker.js";
  */
 export default async function (callConfig = {}){
 
-	global.ewabObjects = {
-		minifiedHashes: [],
-	};
-
+	global.ewabRuntime = ewabRuntime;
 	global.ewabConfig = {};
 
-	log("modern-only", ""); 
-
-	global.ewabConfig = await config.generateMain(callConfig); //calls bar.begin() as soon as possible
+	global.ewabConfig = await config.generateMain(callConfig); //starts logging and calls bar.begin() as soon as possible
 
 	bar(.6);
 
@@ -40,7 +45,6 @@ export default async function (callConfig = {}){
 	await files.begin();
 
 	bar.hide();
-	log.header();
 
 
 	await minify("remove");

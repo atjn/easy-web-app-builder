@@ -1,9 +1,9 @@
 
 import { configOptions } from "../src/config.js";
-import { ewabSourcePath } from "../src/compat.js";
 
 import fs from "fs-extra";
 import path from "path";
+import { ewabSourcePath } from "../src/tools.js";
 
 await fs.copy(path.join(ewabSourcePath, "build-docs/templates"), path.join(ewabSourcePath, "docs"));
 
@@ -19,22 +19,24 @@ function printObject(object, indentation = 0){
 
 	const i = " ".repeat(indentation + 2);
 
-	let string = `{`;
+	let string = object.type === "array" ? `[` : `{`;
 
-	for(const [ key, value ] of Object.entries(object || {})){
+	for(const [ key, value ] of object.type === "array" ? (object.items || []).map(value => ["", value]) : Object.entries(object || {})){
+		if(value.flags?.description){
+			string += `\n${i}//${value.flags.description}`;
+		}
+		string += `\n${i}`;
+		if(key) string += `${key}: `;
 		switch(value.type){
 			case "object":
-				string += `\n${i}${key}: `;
 				string += printObject(value.keys, indentation + 2);
 				break;
 			case "array":
-				string += `\n${i}${key}: `;
-				string += printArray(value, indentation + 2);
+				string += printObject(value, indentation + 2);
 				break;
 			default:
-				string += `\n${i}${key}: `;
-				if(value.type === "boolean") value.flags.default = value.flags.default || false;
-				string += value.type.charAt(0).toUpperCase() + value.type.slice(1);
+				if(value.type === "boolean") value.flags.default = value.flags?.default || false;
+				if(value.type) string += value.type.charAt(0).toUpperCase() + value.type.slice(1);
 				if(value.flags?.default !== undefined && value.type !== "array"){
 					string += `: ${value.type === "string" ? `"` : ``}${value.flags.default}${value.type === "string" ? `"` : ``}`;
 				}
@@ -43,47 +45,12 @@ function printObject(object, indentation = 0){
 				}
 				break;
 		}
+		
+		if(value.flags?.description) string += `\n${i}`;
 
 	}
 
-	string += `\n${" ".repeat(indentation)}},`;
-
-	return string;
-
-}
-
-function printArray(object, indentation = 0){
-
-	const i = " ".repeat(indentation + 2);
-
-	let string = `[`;
-
-	for(const value of object.items || []){
-	switch(value.type){
-		case "object":
-			string += `\n${i}`;
-			string += printObject(value.keys, indentation + 2);
-			break;
-		case "array":
-			string += `\n${i}`;
-			string += printArray(value, indentation + 2);
-			break;
-		default:
-			string += `\n${i}`;
-			if(value.type === "boolean") value.flags.default = value.flags.default || false;
-			string += value.type.charAt(0).toUpperCase() + value.type.slice(1);
-			if(value.flags?.default !== undefined && value.type !== "array"){
-				string += `: ${value.type === "string" ? `"` : ``}${value.flags.default}${value.type === "string" ? `"` : ``}`;
-			}
-			if(value.allow){
-				string += ` ("${value.allow.join(`", "`)}")`;
-			}
-			break;
-	}
-
-}
-
-	string += `\n${" ".repeat(indentation)}],`;
+	string += `\n${" ".repeat(indentation)}${object.type === "array" ? "]" : "}"},`;
 
 	return string;
 

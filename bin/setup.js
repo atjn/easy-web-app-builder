@@ -19,7 +19,7 @@ import fs from "fs-extra";
 import { fileExists, deepMerge } from "../src/tools.js";
 import { findInputFolderCandidates, decideOutputFolderName } from "../src/files.js";
 import scaffold from "./scaffold.js";
-import { defaultConfigName } from "../src/config.js";
+import { defaults } from "../src/config.js";
 
 export default async function (args){
 
@@ -27,7 +27,7 @@ export default async function (args){
 	const s = "\n";
 
 	console.log("");
-	console.log(chalk.bgCyan.black("  Welcome to the Easy-WebApp (EWAB) setup wizard  "));
+	console.log(chalk.bgCyan.black("  Welcome to the Easy Web App Builder (EWAB) setup wizard  "));
 	console.log(chalk.dim("This wizard covers everything a normal user needs. For advanced stuff, check this out: https://github.com/atjn/easy-web-app-builder#advanced"));
 	console.log("");
 	console.log(chalk.yellow(`NOTE: Some of these operations ${chalk.underline("will overwrite files")} in your project. Make sure to back up anything important first.`));
@@ -278,7 +278,7 @@ export default async function (args){
 			name: "useDefaultConfigName",
 			type: "list",
 			prefix: p, suffix: s,
-			message: `That was all! I will save your preferences in a file called ".${defaultConfigName}.js". Is that cool?\n  ${chalk.dim("If you choose a different name, EWAB won't be able to find the file automatically.")}`,
+			message: `That was all! I will save your preferences in a file called ".${defaults.configName}.js". Is that cool?\n  ${chalk.dim("If you choose a different name, EWAB won't be able to find the file automatically.")}`,
 			choices: [
 				"Yes!",
 				"No, I want to call it something else",
@@ -291,7 +291,7 @@ export default async function (args){
 			type: "input",
 			prefix: p, suffix: s,
 			message: `Alright, what should I call it then?\n  ${chalk.dim(`When you call EWAB, you'll have to use 'easy-web-app-builder --config-name "yourconfigname"' for it to read your preferences.`)}`,
-			default: defaultConfigName,
+			default: defaults.configName,
 		},
 
 	])
@@ -299,7 +299,7 @@ export default async function (args){
 	.catch(error => handleError(error));
 
 	const configFile = `\n/**\n * @file\n * Configuration script for eay-webapp.\n */\n\nexport default ${JSON.stringify(allAnswers.config, null, 2)}\n`;
-	await fs.writeFile(path.join(process.cwd(), allAnswers.useDefaultConfigName ? `.${defaultConfigName}.js` : `.${allAnswers.configName}.js`), configFile);
+	await fs.writeFile(path.join(process.cwd(), allAnswers.useDefaultConfigName ? `.${defaults.configName}.js` : `.${allAnswers.configName}.js`), configFile);
 
 
 }

@@ -10,19 +10,10 @@ import chalk from "chalk";
 import logUpdate from "log-update";
 
 import files from "./files.js";
-
-export const logInterfaces = {
-	modern: "Default, makes the output look nice.",
-	minimal: "WIll only show what it is currently doing. The only logs persisted after a completed runs are any warnings encountered.",
-	basic: "Outputs a simple line-by-line log.",
-	none: "No output at all",
-	debug: "Outputs a wealth of information that can help figure out why EWAB is that *that thing*",
-};
-
-export const defaultInterface = "modern";
+import { logInterfaces } from "./config.js";
 
 const progressBar = {
-	length: 13,
+	length: 11,
 	progress: 0,
 	spinnerFrames: [ "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", "⠋" ],
 	spinnerCurrentFrame: "⠙",
@@ -122,6 +113,9 @@ log.warmup = (possibleInterface) => {
 
 		disabled = Boolean(ewabConfig.interface === "none");
 
+		const headerWidth = 26;
+		log("modern-only", chalk.black.bgCyan(`\n${"".padAround(headerWidth, " ")}\n${"Easy Web App Builder".padAround(headerWidth, " ")}\n${"".padAround(headerWidth, " ")}\n`));
+
 		bar.begin("Warming up");
 
 		for(const deferredLog of deferredLogs){
@@ -133,13 +127,6 @@ log.warmup = (possibleInterface) => {
 		warmupLogged = true;
 
 	}
-};
-
-/**
- * Logs the EWAB header.
- */
-log.header = () => {
-	log("standard", `${chalk.black.bgCyan(" easy-web-app-builder ")} Building webapp`);
 };
 
 /**
@@ -241,6 +228,13 @@ bar.freeze = () => {
 
 };
 
+/**
+ * Determines whether TTY functions should be used.
+ * 
+ * @param {string}	interfaceMode	- The name of the interface being used right now.
+ * 
+ * @returns {boolean}	- Whether TTY functions should be used.
+ */
 function useTTY(interfaceMode){
 
 	if(!process.stdout.isTTY) return false;

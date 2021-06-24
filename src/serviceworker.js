@@ -1,4 +1,4 @@
-/* global ewabConfig */
+/* global ewabConfig ewabRuntime */
 
 /**
  * @file
@@ -11,7 +11,6 @@ import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
 import objectHash from "object-hash";
 
-import { ewabSourcePath } from "./compat.js";
 import { log, bar } from "./log.js";
 
 import { generateSW } from "workbox-build";
@@ -31,7 +30,7 @@ async function link(){
 		bar.begin(ewabConfig.serviceworker.clean ? "Adding serviceworker cleaner" : "Linking to serviceworker");
 
 		log(`Adding the serviceworker register script to the project.`);
-		let adderCode = await fs.readFile(path.join(ewabSourcePath, "lib/serviceworker-bridge.js"), "utf8");
+		let adderCode = await fs.readFile(path.join(ewabRuntime.sourcePath, "lib/serviceworker-bridge.js"), "utf8");
 		adderCode = adderCode
 			.replace(`mode = "add"`, `mode = "${ewabConfig.serviceworker.clean ? "clean" : "add"}"`)
 			.replace(`alias = "ewab"`, `alias = "${ewabConfig.alias}"`)

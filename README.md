@@ -1,5 +1,5 @@
-# Easy-WebApp
-Easy-WebApp (EWAB) automates all the boring stuff you need to do when publishing a webapp. It will:
+# Easy-Web-App-Builder
+Easy-Web-App-Builder (EWAB) automates all the boring stuff you need to do when publishing a webapp. It will:
 
 - Generate icons in all necessary sizes and link to them in your html and manifest files.
 - Generate a serviceworker, allowing your site to run as a standalone app.

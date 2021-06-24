@@ -1,7 +1,7 @@
 {
 	
-	"short_name": "A webapp",
-	"name": "An easily built webapp",
+	"short_name": "A web app",
+	"name": "An easily built web app",
 	"lang": "en",
 
 	"start_url": "/",

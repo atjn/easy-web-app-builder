@@ -1,4 +1,4 @@
-/* global ewabConfig ewabObjects */
+/* global ewabConfig ewabRuntime */
 
 /**
  * @file
@@ -17,7 +17,6 @@ import jsdom from "jsdom";
 import glob from "tiny-glob";
 
 
-import { ewabSourcePath } from "./compat.js";
 import { log, bar } from "./log.js";
 import { getExtension, getFolderFiles, fileExists, resolveURL } from "./tools.js";
 
@@ -190,7 +189,7 @@ async function add(){
 
 			let merged = false;
 
-			for(const [index, existingIcon] of ewabObjects.manifest.icons.entries()){
+			for(const [index, existingIcon] of ewabRuntime.manifest.icons.entries()){
 
 				let match = true;
 
@@ -203,12 +202,12 @@ async function add(){
 
 				if(match){
 					if(merged){
-						ewabObjects.manifest.icons.splice(index, 1);
+						ewabRuntime.manifest.icons.splice(index, 1);
 					}else{
 						switch(ewabConfig.icons.mergeMode.manifest){
 							case "overwrite":
-								ewabObjects.manifest.icons.splice(index, 1);
-								ewabObjects.manifest.icons.push(generatedIcon);
+								ewabRuntime.manifest.icons.splice(index, 1);
+								ewabRuntime.manifest.icons.push(generatedIcon);
 								break;
 							case "preserve":
 								break;
@@ -220,7 +219,7 @@ async function add(){
 			}
 
 			if(!merged){
-				ewabObjects.manifest.icons.push(generatedIcon);
+				ewabRuntime.manifest.icons.push(generatedIcon);
 				merged = true;
 			}
 
@@ -245,7 +244,7 @@ async function ensureSourceIcon(){
 
 		if(ewabConfig.icons.list.length === 0){
 			log("warning", `Was unable to find an icon to use for this webapp, falling back to a generic icon instead. Please link to one in any HTML file, ${ewabConfig.manifestPath}, or ${ewabConfig.configName}.`);
-			await fs.copy(path.join(ewabSourcePath, "./lib/scaffolding/images/logo.svg"), path.join(ewabConfig.workPath, path.join(ewabConfig.alias, "default-icon.svg")));
+			await fs.copy(path.join(ewabRuntime.sourcePath, "./lib/scaffolding/images/logo.svg"), path.join(ewabConfig.workPath, path.join(ewabConfig.alias, "default-icon.svg")));
 			ewabConfig.icons.list.push(path.join(ewabConfig.alias, "default-icon.svg"));
 		}
 

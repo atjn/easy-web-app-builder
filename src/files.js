@@ -1,4 +1,4 @@
-/* global ewabConfig ewabObjects */
+/* global ewabConfig ewabRuntime */
 
 /**
  * @file
@@ -11,8 +11,7 @@ import os from "os";
 
 import { log } from "./log.js";
 import { fileExists, folderExists, resolveURL, getSubfolders } from "./tools.js";
-import { ewabSourcePath } from "./compat.js";
-import { defaultAlias } from "./config.js";
+import { defaults } from "./config.js";
 
 import glob from "tiny-glob";
 import jsdom from "jsdom";
@@ -116,12 +115,20 @@ async function begin(){
 				[
 					candidatePath.toLowerCase().includes(ewabConfig.alias.toLowerCase()),
 					( ewabConfig.manifestPath && fileExists(path.join(candidatePath, ewabConfig.manifestPath)) ),
-					( folderExists(path.join(candidatePath, ewabConfig.alias)) || folderExists(path.join(candidatePath, defaultAlias)) ),
+					( folderExists(path.join(candidatePath, ewabConfig.alias)) || folderExists(path.join(candidatePath, defaults.alias)) ),
 					( fileExists(path.join(ewabConfig.rootPath, ewabConfig.inputPath, "index.html")) && fileExists(path.join(candidatePath, "index.html")) ),
 				]
-					.reduce(( count, assertion ) => count + assertion ? 1 : 0) < 2
+					.reduce(( count, assertion ) => count + (assertion ? 1 : 0)) < 2
 			){
-				const backupName = `${ewabConfig.alias}-backup-${name}`;
+				let backupName = `${ewabConfig.alias}-backup-${name}`;
+				if(fs.existsSync(backupName)){
+					const backupBase = backupName;
+					let increment = 0;
+					while(fs.existsSync(backupName)){
+						increment++;
+						backupName = `${backupBase}-${increment}`;
+					}
+				}
 				log("warning", `The final webapp will be saved to the folder '${name}', but was unsure if the existing contents of that folder was important, so it has been backed up as '${backupName}'.`);
 				await fs.rename(candidatePath, path.join(ewabConfig.rootPath, backupName));
 			}else{
@@ -174,7 +181,7 @@ async function begin(){
 			if(await readManifest(path.join(ewabConfig.workPath, ewabConfig.manifestPath))){
 				log(`The manifest link in config seems valid`);
 			}else{
-				ewabObjects.manifest = {};
+				ewabRuntime.manifest = {};
 			}
 		}else{
 			ewabConfig.manifestPath = undefined;
@@ -205,7 +212,7 @@ async function begin(){
 				log(`Found a link to a valid manifest file in an HTML file`);
 			}else{
 				if(manifestPaths.indexOf(manifestPath) + 1 === manifestPaths.length){
-					ewabObjects.manifest = {};
+					ewabRuntime.manifest = {};
 					ewabConfig.manifestPath = path.relative(ewabConfig.workPath, manifestPath);
 					log("This is the last manifest file found, so keeping it despite it being invalid.");
 					break;
@@ -232,7 +239,7 @@ async function begin(){
 
 	if(!ewabConfig.manifestPath){
 		log("warning", `No site manifest found, so using a generic one instead. You can generate one in your source folder with the command: easy-web-app-builder scaffold "manifest"`);
-		await fs.copy(path.join(ewabSourcePath, "lib/scaffolding/manifest.json"), path.join(ewabConfig.workPath, "manifest.json"));
+		await fs.copy(path.join(ewabRuntime.sourcePath, "lib/scaffolding/manifest.json"), path.join(ewabConfig.workPath, "manifest.json"));
 		await readManifest(path.join(ewabConfig.workPath, "manifest.json"));
 	}
 
@@ -245,7 +252,7 @@ async function begin(){
 	 */
 	async function readManifest(manifestPath){
 		try{
-			ewabObjects.manifest = await fs.readJson(manifestPath);
+			ewabRuntime.manifest = await fs.readJson(manifestPath);
 			ewabConfig.manifestPath = path.relative(ewabConfig.workPath, manifestPath);
 			return true;
 		}catch(error){
@@ -313,8 +320,8 @@ async function begin(){
 	}
 
 	const foundManifestIcons = [];
-	if(!Array.isArray(ewabObjects.manifest.icons)) ewabObjects.manifest.icons = [];
-	for(const icon of ewabObjects.manifest.icons){
+	if(!Array.isArray(ewabRuntime.manifest.icons)) ewabRuntime.manifest.icons = [];
+	for(const icon of ewabRuntime.manifest.icons){
 		if(icon.src){
 			const iconPath = path.relative(ewabConfig.workPath, resolveURL(ewabConfig.workPath, path.join(ewabConfig.workPath, ewabConfig.manifestPath), icon.src));
 			if(fileExists(path.join(ewabConfig.workPath, iconPath))){
@@ -357,9 +364,12 @@ async function clean(){
 	if(ewabConfig?.workPath) fs.remove(ewabConfig.workPath);
 }
 
+/**
+ * Writes the final manifest to the manifest file in the project.
+ */
 async function writeManifest(){
 	log("Writing final manifest to project");
-	await fs.writeJson(path.join(ewabConfig.workPath, ewabConfig.manifestPath), ewabObjects.manifest);
+	await fs.writeJson(path.join(ewabConfig.workPath, ewabConfig.manifestPath), ewabRuntime.manifest);
 }
 
 /**
@@ -376,6 +386,13 @@ export function findInputFolderCandidates(rootPath){
 
 }
 
+/**
+ * Figures out what the final output folder should be called, especially by looking at the name of the input folder.
+ * 
+ * @param {string}	inputFolderName	- The name of the input folder.
+ * 
+ * @returns {string} - The output folder name to be used.
+ */
 export function decideOutputFolderName(inputFolderName){
 
 	let name = "public";

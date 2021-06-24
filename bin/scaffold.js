@@ -1,10 +1,12 @@
 
+
 import path from "path";
 import fs from "fs-extra";
 
 
-import { ewabSourcePath } from "../src/compat.js";
 import { getRootFileConfig } from "../src/config.js";
+import { ewabSourcePath } from "../src/tools.js";
+
 
 export default async function ({type, inputPath}){
 
