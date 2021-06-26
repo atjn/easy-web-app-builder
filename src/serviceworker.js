@@ -11,6 +11,7 @@ import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
 import objectHash from "object-hash";
 
+export const coreFileExtensions = ["html", "htm", "css", "js", "mjs", "cjs", "json", "svg"];
 import { log, bar } from "./log.js";
 
 import { generateSW } from "workbox-build";
@@ -78,7 +79,7 @@ async function add(){
 
 		const workboxConfig = {
 			globDirectory: ewabConfig.workPath,
-			globPatterns: [ "**/*.{html,htm,css,js,mjs,cjs,json,svg}" ],
+			globPatterns: [ `**/*.{${coreFileExtensions.join(",")}}` ],
 			globIgnores: ewabConfig.serviceworker.experience === "website" ? [ "**/*" ] : undefined,
 			swDest: path.join(ewabConfig.workPath, serviceworkerName),
 			cacheId: ewabConfig.alias,

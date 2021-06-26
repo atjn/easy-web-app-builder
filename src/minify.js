@@ -415,7 +415,7 @@ async function processItem(item){
 								}
 								log(`Minifying '${itemRelativePath}' to a ${size.width}x${size.height} ${targetExtension} image`);
 
-								options[engine.name || targetExtension] = {
+								options[engine.name ?? targetExtension] = {
 									...engine.options,
 									...item.fileConfig.images.directOptions[targetExtensions],
 								};
@@ -531,12 +531,12 @@ async function updateImageReferences(){
 				const srcPath = resolveURL(
 					ewabConfig.workPath,
 					markupPath,
-					img.src || "",
+					img.src ?? "",
 				);
 				const srcsetPath = resolveURL(
 					ewabConfig.workPath,
 					markupPath,
-					img.srcset || "",
+					img.srcset ?? "",
 				);
 
 				let imagePath;
@@ -593,7 +593,7 @@ async function updateImageReferences(){
 						if(fileConfig.images.minify && fileConfig.images.convert){
 							//fileConfig.images.resize = processResizeSettings(fileConfig.images.resize, imagePath);
 
-							if(fileConfig.images.resize.addSizesTagToImg && fileConfig.images.resize.sizes) img.sizes = img.sizes || fileConfig.images.resize.sizes;
+							if(fileConfig.images.resize.addSizesTagToImg && fileConfig.images.resize.sizes) img.sizes = img.sizes ?? fileConfig.images.resize.sizes;
 
 							const srcset = [];
 

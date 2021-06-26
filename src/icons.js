@@ -123,7 +123,7 @@ async function add(){
 				if(generatedElement.name === "apple-mobile-web-app-capable" && !ewabConfig.serviceworker.add) generatedElement.remove();
 
 				//Make sure the link points to the correct relative destination
-				const baseLink = generatedElement.href || generatedElement.content;
+				const baseLink = generatedElement.href ?? generatedElement.content;
 				if(baseLink && baseLink !== "yes"){
 					const absolutePath = resolveURL(ewabConfig.workPath, ewabConfig.workPath, baseLink);
 					const relativeLink = path.relative(path.join(markupPath, ".."), absolutePath);

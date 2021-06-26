@@ -36,7 +36,7 @@ export default async function (args){
 	global.ewabConfig = {
 		interface: "none",
 		alias: args.alias,
-		rootPath: args.rootPath || process.cwd(),
+		rootPath: args.rootPath ?? process.cwd(),
 	};
 
 	const inputFolderCandidates = findInputFolderCandidates(global.ewabConfig.rootPath);
@@ -155,7 +155,7 @@ export default async function (args){
 	.then(answers => allAnswers = deepMerge(allAnswers, answers))
 	.catch(error => handleError(error));
 
-	allAnswers.config.fileExceptions = allAnswers.config.fileExceptions || [];
+	allAnswers.config.fileExceptions = allAnswers.config.fileExceptions ?? [];
 
 	const absoluteInputPath = path.join(process.cwd(), allAnswers.inputPath);
 	if(allAnswers.cleanSetup){

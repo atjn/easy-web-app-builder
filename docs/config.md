@@ -1,3 +1,8 @@
+_[<- Back to the main page](../README.md)_
+# Full configuration file
+
+This is an overview of the entire configuration file. 
+
 ```js
 {
   //the name EWAB uses when adding elements to the web app
@@ -77,7 +82,13 @@
         },
       ],
     },
-    directOptions: Object
+    directOptions: {
+      webp: Object
+      jxl: Object
+      avif: Object
+      jpg: Object
+      png: Object
+    },
   },
   //alter the settings for certain files
   fileExceptions: [
@@ -85,6 +96,9 @@
       //glob pattern to match file with
       glob: String
       
+      serviceworker: {
+        type: String ("static", "online", "core")
+      },
       files: {
         minify: Boolean: true
         addSourceMaps: Boolean: true
@@ -112,12 +126,19 @@
             },
           ],
         },
-        directOptions: Object
+        directOptions: {
+          webp: Object
+          jxl: Object
+          avif: Object
+          jpg: Object
+          png: Object
+        },
       },
     },
   ],
   
-},
+}
 ```
 
-
+---
+<p style="opacity:.8;font-style:italic;text-align:right">This documentation was generated for <a href="https://github.com/atjn/easy-pwa#readme">Easy Web App Builder</a> 1.0.0-beta1</p>

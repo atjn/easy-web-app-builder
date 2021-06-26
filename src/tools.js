@@ -77,15 +77,9 @@ export function resolveURL(appRootPath = "", fileFolderPath = "", URL = ""){
 }
 
 /**
- * Gets the current version of the app.
- * 
- * @returns	{string}	- The current version of the app.
+ * The NPM package file.
  */
-export function getEWABVersion(){
-	
-	return fs.readJsonSync(path.join(ewabSourcePath, "package.json")).version;
-
-}
+export const ewabPackage = fs.readJsonSync(path.join(ewabSourcePath, "package.json"));
 
 /**
  * Takes a file path/name and returns a standardised extension name with no leading dot and all lowercase letters.

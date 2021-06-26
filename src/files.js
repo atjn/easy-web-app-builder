@@ -414,10 +414,10 @@ export function decideOutputFolderName(inputFolderName){
 			"Src":		"Pub",
 			"SRC":		"PUB",
 		};
-		name = typeMap[inputMatch.type] || typeMap[inputMatch.type.toLowerCase()] || name;
+		name = typeMap[inputMatch.type] ?? typeMap[inputMatch.type.toLowerCase()] ?? name;
 	}
 
-	if(inputMatch?.brand) name = `${inputMatch.brand}${inputMatch.delimiter || ""}${name}`;
+	if(inputMatch?.brand) name = `${inputMatch.brand}${inputMatch.delimiter ?? ""}${name}`;
 
 	return name;
 }

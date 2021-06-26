@@ -9,7 +9,7 @@ import path from "path";
 import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
 
-import { getEWABVersion, getFolderFiles } from "./tools.js";
+import { ewabPackage, getFolderFiles } from "./tools.js";
 import { log } from "./log.js";
 
 export default { ensure, seal };
@@ -29,7 +29,7 @@ async function ensure(){
 	if(
 		ewabConfig.useCache === false ||
 		(await generateHash(ewabConfig.cachePath)) !== cacheHash?.hash ||
-		getEWABVersion() !== cacheHash?.version ||
+		ewabPackage.version !== cacheHash?.version ||
 		ewabConfig.hash !== cacheHash?.config
 	){
 
@@ -72,7 +72,7 @@ async function seal(){
 			path.join(ewabConfig.cachePath, "cache-hash.json"),
 			{
 				"hash": (await generateHash(ewabConfig.cachePath)),
-				"version": getEWABVersion(),
+				"version": ewabPackage.version,
 				"config": ewabConfig.hash,
 			},
 		);

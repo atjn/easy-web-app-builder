@@ -20,6 +20,7 @@ export const defaults = {
 	alias: "ewab",
 	configName: "ewabconfig",
 	interface: "modern",
+	imageExtension: "webp",
 };
 
 export const logInterfaces = {
@@ -29,6 +30,8 @@ export const logInterfaces = {
 	none: "No output at all",
 	debug: "Outputs a wealth of information that can help figure out why EWAB is that *that thing*",
 };
+
+export const supportedImageExtensions = ["webp", "jxl", "avif", "jpg", "png"];
 
 
 /**
@@ -67,7 +70,7 @@ async function generateMain(callConfig){
 	log.warmup(mainConfig.interface);
 
 	mainConfig.rootPath = callConfig.rootPath;
-	mainConfig.cachePath = mainConfig.cachePath || path.join(mainConfig.rootPath, `.${mainConfig.alias}-cache`);
+	mainConfig.cachePath = mainConfig.cachePath ?? path.join(mainConfig.rootPath, `.${mainConfig.alias}-cache`);
 
 	mainConfig.fileExceptions.push(
 		{
@@ -196,139 +199,145 @@ const joi = joiBase.defaults(schema => {
 	}
 });
 
-const supportedImageExtensions = joi.string().valid("webp", "jxl", "avif", "jpg", "png");
+const options = {
 
+	global: {
 
-const globalOptions = {
+		alias: joi.string().default(defaults.alias).description("the name EWAB uses when adding elements to the web app"),
 
-	alias: joi.string().default(defaults.alias).description("the name EWAB uses when adding elements to the web app"),
+		interface: joi.string().default(defaults.interface).description("how progress is logged to the console")
+			.valid(...Object.keys(logInterfaces)),
 
-	interface: joi.string().default(defaults.interface).description("how progress is logged to the console")
-		.valid(...Object.keys(logInterfaces)),
+		useCache: joi.boolean().default(true).description("if a cache should be used to speed up consecutive runs"),
 
-	useCache: joi.boolean().default(true).description("if a cache should be used to speed up consecutive runs"),
+		inputPath: joi.string().description("path to the input folder"),
 
-	inputPath: joi.string().description("path to the input folder"),
+		outputPath: joi.string().description("path to the output folder"),
 
-	outputPath: joi.string().description("path to the output folder"),
+		manifestPath: joi.string().description("path to the manifest, relative to the input folder"),
 
-	manifestPath: joi.string().description("path to the manifest, relative to the input folder"),
+		icons: joi.object({
 
-	icons: joi.object({
+			add: joi.boolean().default(true).description("if custom icons should be added to the app"),
 
-		add: joi.boolean().default(true).description("if custom icons should be added to the app"),
+			source: joi.string().description("path to the icon to generate all other icons from"),
 
-		source: joi.string().description("path to the icon to generate all other icons from"),
+			list: joi.array().items(
+				joi.string(),
+			).description("list of all icons currently in the project"),
 
-		list: joi.array().items(
-			joi.string(),
-		).description("list of all icons currently in the project"),
+			blockList: joi.array().items(
+				joi.string(),
+			),
 
-		blockList: joi.array().items(
-			joi.string(),
-		),
+			mergeMode: joi.object({
 
-		mergeMode: joi.object({
+				index: joi.string().default("override")
+					.valid("override", "combine"),
 
-			index: joi.string().default("override")
+				manifest: joi.string().default("override")
 				.valid("override", "combine"),
 
-			manifest: joi.string().default("override")
-			.valid("override", "combine"),
+			}),
 
 		}),
 
-	}),
+		serviceworker: joi.object({
 
-	serviceworker: joi.object({
+			add: joi.boolean().default(false),
 
-		add: joi.boolean().default(false),
+			clean: joi.boolean().default(false),
+			
+			experience: joi.string()
+				.valid("online", "app"),
 
-		clean: joi.boolean().default(false),
-		
-		experience: joi.string()
-			.valid("online", "app"),
+			debug: joi.boolean().default(false),
 
-		debug: joi.boolean().default(false),
+			networkTimeoutSeconds: joi.number().positive().default(4),
 
-		networkTimeoutSeconds: joi.number().positive().default(4),
+			displayUpdateButton: joi.boolean().default(true),
 
-		displayUpdateButton: joi.boolean().default(true),
+			displayOfflineBanner: joi.boolean().default(true),
 
-		displayOfflineBanner: joi.boolean().default(true),
-
-		customRules:  joi.array().items(
-			joi.object(),
-		),
-
-	}),
-
-};
-
-const localOptions = {
-
-	files: joi.object({
-
-		minify: joi.boolean().default(true),
-
-		addSourceMaps: joi.boolean().default(true),
-
-		directOptions: joi.object(),
-
-	}),
-
-	images: joi.object({
-
-		minify:				joi.boolean().default(true),
-		convert:			joi.boolean().default(true),
-		updateReferences:	joi.boolean().default(true),
-		keepOriginal:		joi.boolean().default(true),
-
-		targetExtension: supportedImageExtensions.default("webp"),
-
-		targetExtensions: joi.array().items(
-			supportedImageExtensions,
-		),
-
-		resize: joi.object({
-
-			auto: joi.boolean().default(true),
-
-			fallbackSize: joi.number().integer().positive(),
-
-			maxSize: joi.number().integer().positive().default(2560),
-
-			sizes: joi.string(),
-
-			addSizesTagToImg: joi.boolean().default(true),
-
-			customSizes: joi.array().items(
-				joi.object({
-					width: joi.number().integer().positive(),
-					height: joi.number().integer().positive(),
-				}),
+			customRules:  joi.array().items(
+				joi.object(),
 			),
 
 		}),
 
-		directOptions: joi.object(),
+	},
+	
+	universal: {
 
-	}),
+		files: joi.object({
+
+			minify: joi.boolean().default(true),
+
+			addSourceMaps: joi.boolean().default(true),
+
+			directOptions: joi.object(),
+
+		}),
+
+		images: joi.object({
+
+			minify:				joi.boolean().default(true),
+			convert:			joi.boolean().default(true),
+			updateReferences:	joi.boolean().default(true),
+			keepOriginal:		joi.boolean().default(true),
+
+			targetExtension: joi.string().valid(...supportedImageExtensions).default(defaults.imageExtension),
+
+			targetExtensions: joi.array().items(
+				joi.string().valid(...supportedImageExtensions),
+			),
+
+			resize: joi.object({
+
+				auto: joi.boolean().default(true),
+
+				fallbackSize: joi.number().integer().positive(),
+
+				maxSize: joi.number().integer().positive().default(2560),
+
+				sizes: joi.string(),
+
+				addSizesTagToImg: joi.boolean().default(true),
+
+				customSizes: joi.array().items(
+					joi.object({
+						width: joi.number().integer().positive(),
+						height: joi.number().integer().positive(),
+					}),
+				),
+
+			}),
+
+			directOptions: joi.object([...supportedImageExtensions].reverse().reduce((object, extension) => { return { [extension]: joi.object(), ...object }; }, {})),
+
+		}),
+
+	},
+
+	local: {
+		glob: joi.string().description("glob pattern to match file with"),
+		serviceworker: joi.object({
+			type: joi.string().valid("static", "online", "core"),
+		}),
+	},
 
 };
 
 export const configOptions = joi.object({
 
-	...globalOptions,
-	...localOptions,
+	...deepMerge(options.global, options.universal),
 
 	fileExceptions: joi.array().items(
-		joi.object({
-			glob: joi.string().description("glob pattern to match file with"),
-			...localOptions,
-		}),
+		joi.object(deepMerge(options.local, options.universal)),
 	).description("alter the settings for certain files"),
 
 });
+
+
 
 export default { generateMain, generateForFile };

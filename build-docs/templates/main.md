@@ -70,36 +70,16 @@ Here are some of the things you can set in the configuration object:
 
 ### `inputPath` and  `outputPath`
 The source files for your webapp need to be saved to a folder somewhere. EWAB will try to guess which folder it should use, but you can also set it manually like this:
-```js
-{
-  inputPath: "path/to/input/folder/",
-}
-```
+insert[setConfigValue inputPath "path/to/input/folder/"]
 When EWAB is done, it will output the final website to a new folder. If you want to specify the folder name/path, you can do so like this:
-```js
-{
-  outputPath: "path/to/output/folder/",
-}
-```
+insert[setConfigValue outputPath "path/to/output/folder/"]
 
 ## Icons
 By default, EWAB will find your website's favicon, generate it in different sizes, and then add the new copies to the website. If you don't want EWAB to mess with your icons, you can set:
-```js
-{
-  icons: {
-    add: false,
-  },
-}
-```
+insert[setConfigValue icons add false]
 
 If EWAB is using the wrong image as favicon, you can tell it exactly which icon it should use by setting:
-```js
-{
-  icons: {
-    source: "path/to/your/favicon.svg",
-  },
-}
-```
+insert[setConfigValue icons source "path/to/your/favicon.svg"]
 
 ## Images
 
@@ -107,27 +87,12 @@ If EWAB is using the wrong image as favicon, you can tell it exactly which icon 
 By default, EWAB will locate all HTML, CSS, JS, JSON and SVG files and minify them. It will not preserve comments.
 
 If you don't want EWAB to minify your files, you can change it here:
-```js
-{
-  files: {
-    minify: false,
-  },
-}
-```
+insert[setConfigValue files minify false]
 
 EWAB will also create source files and add them to your project. If you don't like that, you can change it here:
-```js
-{
-  files: {
-    addSourceMaps: false,
-  },
-}
-```
+insert[setConfigValue files addSourceMaps false]
 
 ### Serviceworker
 EWAB won't add a serviceworker by default because it requires a bit of manual setup.
 
 Go to the [serviceworker configuration guide](./docs/serviceworker.md).
-
----
-<p style="opacity:.8;font-style:italic;text-align:right">This documentation was generated for <a href="https://github.com/atjn/easy-pwa#readme">Easy Web App Builder</a> 1.0.0-beta1</p>
