@@ -20,7 +20,7 @@
     "test:usability": "",
     "test:everything": "npm install && npm run lint && npm run test:usability",
     "test": "npm run test:everything",
-    "build-docs": "node \"build-docs/build.js\""
+    "build-docs": "node \"docs-source/build.js\""
   },
   "repository": {
     "type": "git",
@@ -48,7 +48,7 @@
   },
   "homepage": "https://github.com/atjn/easy-pwa#readme",
   "dependencies": {
-    "@squoosh/lib": "0.3.1",
+    "@squoosh/lib": "^0.3.1",
     "chalk": "^4.1.1",
     "chokidar": "^3.5.2",
     "clean-css": "^5.1.3",
@@ -57,17 +57,16 @@
     "fs-extra": "^10.0.0",
     "html-minifier-terser": "^5.1.1",
     "inquirer": "^8.1.1",
-    "inquirer-file-tree-selection-prompt": "^1.0.7",
+    "inquirer-file-tree-selection-prompt": "^1.0.12",
     "joi": "^17.4.0",
     "jsdom": "^16.6.0",
-    "lodash.clonedeep": "^4.5.0",
-    "lodash.mergewith": "^4.6.2",
+    "lodash": "^4.17.21",
     "log-update": "^4.0.0",
     "minimatch": "^3.0.4",
     "object-hash": "^2.2.0",
     "pwa-asset-generator": "^4.1.1",
     "svgo": "^2.3.1",
-    "terser": "^5.7.0",
+    "terser": "^5.7.1",
     "tiny-async-pool": "^1.2.0",
     "tiny-glob": "^0.2.9",
     "workbox-build": "^6.1.5",
@@ -76,7 +75,7 @@
   "devDependencies": {
     "@atjn/eslint-config": "^3.3.0",
     "eslint": "^7.29.0",
-    "eslint-plugin-jsdoc": "^35.4.0",
+    "eslint-plugin-jsdoc": "^35.4.1",
     "eslint-plugin-promise": "^5.1.0"
   }
 }

@@ -8,8 +8,7 @@ import path from "path";
 import fs from "fs-extra";
 import url from "url";
 
-import lodash_cloneDeep from "lodash.clonedeep";
-import lodash_mergeWith from "lodash.mergewith";
+import lodash from "lodash";
 
 //import glob from "tiny-glob";
 
@@ -155,7 +154,7 @@ export function folderExists(folderPath){
  * @returns {object} - The new combined object.
  */
 export function deepMerge(source, update){
-	return lodash_mergeWith({}, source, update, (source, update) => Array.isArray(source) ? [ ...source, ...update ] : undefined);
+	return lodash.mergeWith({}, source, update, (source, update) => Array.isArray(source) ? [ ...source, ...update ] : undefined);
 }
 
 /**
@@ -166,7 +165,7 @@ export function deepMerge(source, update){
  * @returns {object} - The cloned object.
  */
 export function deepClone(source){
-	return lodash_cloneDeep(source);
+	return lodash.cloneDeep(source);
 }
 
 /*

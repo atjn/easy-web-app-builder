@@ -150,7 +150,7 @@ async function run(){ //workaround while waiting for top-level await support in 
 	bar.begin("Building docs");
 
 	await fs.remove(path.join(ewabSourcePath, "docs"));
-	await fs.copy(path.join(ewabSourcePath, "build-docs/templates"), path.join(ewabSourcePath, "docs"));
+	await fs.copy(path.join(ewabSourcePath, "docs-source/templates"), path.join(ewabSourcePath, "docs"));
 
 	const markdownPaths = await glob("**/*.{md}", {cwd: path.join(ewabSourcePath, "docs"), absolute: true});
 
