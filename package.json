@@ -58,13 +58,13 @@
     "html-minifier-terser": "^5.1.1",
     "inquirer": "^8.1.1",
     "inquirer-file-tree-selection-prompt": "^1.0.12",
-    "joi": "^17.4.0",
+    "joi": "^17.4.1",
     "jsdom": "^16.6.0",
     "lodash": "^4.17.21",
     "log-update": "^4.0.0",
     "minimatch": "^3.0.4",
     "object-hash": "^2.2.0",
-    "pwa-asset-generator": "^4.1.1",
+    "pwa-asset-generator": "^4.2.1",
     "svgo": "^2.3.1",
     "terser": "^5.7.1",
     "tiny-async-pool": "^1.2.0",
@@ -74,8 +74,8 @@
   },
   "devDependencies": {
     "@atjn/eslint-config": "^3.3.0",
-    "eslint": "^7.29.0",
-    "eslint-plugin-jsdoc": "^35.4.1",
+    "eslint": "^7.30.0",
+    "eslint-plugin-jsdoc": "^35.4.3",
     "eslint-plugin-promise": "^5.1.0"
   }
 }
