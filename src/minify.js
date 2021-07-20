@@ -11,13 +11,15 @@ import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
 import { log, bar } from "./log.js";
 import { fileExists, getExtension, resolveURL, deepClone } from "./tools.js";
-import config from "./config.js";
+import config, { supportedImageExtensions } from "./config.js";
+import lodash from "lodash";
 
 import jsdom from "jsdom";
 
 
 
 import { ImagePool } from "@squoosh/lib";
+import { ssim } from "ssim.js";
 
 import os from "os";
 
@@ -70,8 +72,8 @@ async function minify(type){
 		case "images":
 			processName = {
 				action: {
-					present: "Minifying",
-					past: "Minified",
+					present: "Compressing",
+					past: "Compressed",
 				},
 				item: {
 					singular: "image",
@@ -96,7 +98,7 @@ async function minify(type){
 
 		if(
 			(type === "files" && !["html", "css", "js", "json", "svg"].includes(extension)) ||
-			(type === "images" && !["png", "jpg", "jpeg", "webp"].includes(extension))
+			(type === "images" && !supportedImageExtensions.includes(extension))
 		){
 			continue;
 		}
@@ -106,7 +108,7 @@ async function minify(type){
 		if(
 			(type === "remove" && fileConfig.files.remove !== true) ||
 			(type === "files" && fileConfig.files.minify !== true) ||
-			(type === "images" && fileConfig.images.minify !== true)
+			(type === "images" && fileConfig.images.compress !== true)
 		){
 			continue;
 		}
@@ -331,6 +333,9 @@ async function processItem(item){
 
 			case "images": {
 
+				log(`Compressing '${itemRelativePath}'..`);
+				const reports = [];
+
 				const originalImage = global.imagePool.ingestImage(item.path);
 
 				await originalImage.decoded;
@@ -345,7 +350,7 @@ async function processItem(item){
 					try{
 
 						const cachedImagePath = path.join(ewabConfig.cachePath, "items", `${originalHash}-${size.width}w`);
-						const newImagePath = (ewabConfig.images.preserveOriginalFile && size.width === (await originalImage.decoded).bitmap.width) ?
+						const newImagePath = (item.fileConfig.images.preserveOriginalFile && size.width === (await originalImage.decoded).bitmap.width) ?
 							item.path :
 							item.path.replace(/\.\w+$/u, `-${size.width}w$&`).replace(/\.\w+$/u, ".");
 
@@ -354,7 +359,7 @@ async function processItem(item){
 							if(!fileExists(`${cachedImagePath}.${targetExtension}`)) integrity = false;
 						}
 						if(integrity){
-							log(`Copying minified version${targetExtensions.length > 1 ? "s" : ""} of '${itemRelativePath}' from cache`);
+							reports.push(`${size.width}x${size.height}, (${targetExtensions.join(", ")}), copied from cache`);
 						}else{
 
 							const image = deepClone(originalImage);
@@ -369,76 +374,145 @@ async function processItem(item){
 								},
 							);
 
-							const options = {};
-
 							for(const targetExtension of targetExtensions){
 
+								const options = {};
 								const engine = {};
 
 								switch(targetExtension){
 									case "png":
 										engine.name = "oxipng";
+										engine.mainQualityOption = {
+											onlyLossless: true,
+										};
 										break;
 									case "avif":
-										engine.options = {
-											...(await image.decoded).lossless ?
-												{
-													cqLevel: 0,
-													subsample: 3,
-												} :
-												{
-													cqLevel: 33,
-													subsample: 1,
-												},
+										engine.losslessOptions = {
+											cqLevel: 0,
+											subsample: 3,
+										};
+										engine.mainQualityOption = {
+											key: "cqLevel",
+											min: 62,
+											max: 0,
+											probes: [50, 30],
 										};
 										break;
 									case "webp":
-										engine.options = {
-											lossless: (await image.decoded).lossless ? 1 : 0,
+										engine.losslessOptions = {
+											lossless: 1,
 										};
 										break;
 									case "jpg":
 										engine.name = "mozjpeg";
 										engine.options = {
-											quality: (await image.decoded).lossless ? 100 : 75,
 											progressive: true,
+										};
+										engine.losslessOptions = {
+											quality: 100,
 										};
 										break;
 									case "jxl":
 										engine.options = {
-											quality: (await image.decoded).lossless ? 100 : 75,
 											progressive: true,
+										};
+										engine.losslessOptions = {
+											quality: 100,
 										};
 										break;
 									default:
-										throw new Error(`Does not support minifying to image with extension "${targetExtension}"`);
+										throw new Error(`Does not support compressing to image with extension "${targetExtension}"`);
 								}
-								log(`Minifying '${itemRelativePath}' to a ${size.width}x${size.height} ${targetExtension} image`);
 
-								options[engine.name ?? targetExtension] = {
-									...engine.options,
-									...item.fileConfig.images.directOptions[targetExtensions],
+								engine.name = engine.name ?? targetExtension;
+								engine.mainQualityOption = engine.mainQualityOption ?? {
+									key: "quality",
+									min: 40,
+									max: 100,
+									probes: [40, 60],
 								};
 
+								options[engine.name] = {
+									...engine.options,
+									...item.fileConfig.images.encoderOptions[targetExtension],
+								};
+
+								let loggedQuality = "";
+
+								if(engine.mainQualityOption.onlyLossless === true){
+
+									loggedQuality = `only supports highest`;
+
+								}else if(item.fileConfig.images.encoderOptions[targetExtension][engine.mainQualityOption.key]){
+
+									loggedQuality = `${item.fileConfig.images.encoderOptions[targetExtension][engine.mainQualityOption.key]} (directly set in config)`;
+
+								}else if(item.fileConfig.images.quality === 1){
+
+									loggedQuality = `highest (as set in config)`;
+									options[engine.name] = { ...options[engine.name], ...engine.losslessOptions };
+
+								}else{
+
+									const results = [];
+
+									for(const quality of engine.mainQualityOption.probes){
+										options[engine.name][engine.mainQualityOption.key] = quality;
+										await image.encode(options);
+
+										const compressedImage = global.imagePool.ingestImage((await image.encodedWith[engine.name]).binary);
+
+										results.push(ssim((await image.decoded).bitmap, (await compressedImage.decoded).bitmap).mssim);
+									}
+
+									/**
+									 * If an image is hard/impossible to compress, the SSIM values can be very close to a straight line.
+									 * Minor noise can cause the probes to describe a line where less quality results in a better looking image, which is obviously not true.
+									 * This check catches that situation, and encodes the image losslessly instead.
+									 */
+									if(results[0] >= results[1]){
+
+										options[engine.name][engine.mainQualityOption.key] = engine.mainQualityOption.max;
+
+									}else{
+
+										/**
+										 * The next three lines plot a linear graph from the results of the two probes,
+										 * then determines what quality setting correlates with the desired SSIM quality, according to the graph.
+										 */
+										const slope = (results[1] - results[0]) / (engine.mainQualityOption.probes[1] - engine.mainQualityOption.probes[0]);
+										const offset = results[0] - (slope * engine.mainQualityOption.probes[0]);
+										options[engine.name][engine.mainQualityOption.key] = Math.round( lodash.clamp((( item.fileConfig.images.quality - offset ) / slope), engine.mainQualityOption.min, engine.mainQualityOption.max) );
+
+									}
+
+									loggedQuality = `${options[engine.name][engine.mainQualityOption.key]} (mathing overall quality set in config: ${item.fileConfig.images.quality})`;
+
+									if(options[engine.name][engine.mainQualityOption.key] === engine.mainQualityOption.max){
+										options[engine.name] = { ...options[engine.name], ...engine.losslessOptions };
+									}
+
+
+								}
+
+								await image.encode(options);
+								if(!(await image.encodedWith[engine.name])?.extension || !(await image.encodedWith[engine.name])?.binary) throw new Error(`Unexpected error while compressing image`);
+								await fs.writeFile(`${cachedImagePath}.${(await image.encodedWith[engine.name]).extension}`, (await image.encodedWith[engine.name]).binary);
+
+
+								reports.push(`${size.width}x${size.height}, ${targetExtension}, quality: ${loggedQuality}`);
+
 							}
-
-							await image.encode(options);
-							
-							await Promise.all([ ...Object.values(image.encodedWith) ].map(async encodedImage => {
-								if(!(await encodedImage)?.extension || !(await encodedImage)?.binary) throw new Error(`Unexpected error while minifying image`);
-								return await fs.writeFile(`${cachedImagePath}.${(await encodedImage).extension}`, (await encodedImage).binary);
-							}));
-
 						
 						}
 						
 						await Promise.all(targetExtensions.map(targetExtension => {
 							return fs.copy(`${cachedImagePath}.${targetExtension}`, `${newImagePath}.${targetExtension}`);
 						}));
-
+					
 					}catch(error){
 
-						log("warning", `Unable to minify '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
+						log("warning", `Unable to compress '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
 
 						log(`Squoosh error: ${error}`);
 					}
@@ -446,6 +520,9 @@ async function processItem(item){
 				}
 
 				if(!item.fileConfig.images.keepOriginal) await fs.remove(item.path);
+
+				log(`Completed compression of ${itemRelativePath}:`);
+				for(const report of reports) log(`  ${report}`);
 
 				return;
 
@@ -456,9 +533,9 @@ async function processItem(item){
 	}catch(error){
 
 		if(error.includes("has an unsupported format")){
-			log("warning", `Was not able to read '${itemRelativePath}', it will not be minified.`);
+			log("warning", `Was not able to read '${itemRelativePath}', it will not be compressed.`);
 		}else{
-			log("warning", `Unable to minify '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
+			log("warning", `Unable to compress '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
 		}
 		log(`Squoosh error: ${error}`);
 
@@ -488,9 +565,9 @@ async function updateImageReferences(){
 
 				const fileConfig = config.generateForFile(imagePath);
 
-				if(fileConfig.images.minify && fileConfig.images.convert){
+				if(fileConfig.images.compress && fileConfig.images.convert){
 
-					log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: Updating reference to ${path.relative(ewabConfig.rootPath, imagePath)} with minified/converted images`);
+					log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: Updating reference to ${path.relative(ewabConfig.rootPath, imagePath)} with compressed/converted images`);
 
 					const images = [];
 
@@ -590,7 +667,7 @@ async function updateImageReferences(){
 
 						const fileConfig = config.generateForFile(imagePath);
 
-						if(fileConfig.images.minify && fileConfig.images.convert){
+						if(fileConfig.images.compress && fileConfig.images.convert){
 							//fileConfig.images.resize = processResizeSettings(fileConfig.images.resize, imagePath);
 
 							if(fileConfig.images.resize.addSizesTagToImg && fileConfig.images.resize.sizes) img.sizes = img.sizes ?? fileConfig.images.resize.sizes;

@@ -61,7 +61,8 @@ This is an overview of the entire configuration file.
     directOptions: Object
   },
   images: {
-    minify: Boolean: true
+    compress: Boolean: true
+    quality: Number: 0.999
     convert: Boolean: true
     updateReferences: Boolean: true
     keepOriginal: Boolean: true
@@ -82,7 +83,7 @@ This is an overview of the entire configuration file.
         },
       ],
     },
-    directOptions: {
+    encoderOptions: {
       webp: Object
       jxl: Object
       avif: Object
@@ -105,7 +106,8 @@ This is an overview of the entire configuration file.
         directOptions: Object
       },
       images: {
-        minify: Boolean: true
+        compress: Boolean: true
+        quality: Number: 0.999
         convert: Boolean: true
         updateReferences: Boolean: true
         keepOriginal: Boolean: true
@@ -126,7 +128,7 @@ This is an overview of the entire configuration file.
             },
           ],
         },
-        directOptions: {
+        encoderOptions: {
           webp: Object
           jxl: Object
           avif: Object

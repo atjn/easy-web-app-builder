@@ -67,7 +67,7 @@ async function add(){
 
 	if(ewabConfig.serviceworker.clean){
 
-		log(`NOTE: Because the "clean" option is set to true, no serviceworker will be build.`);
+		log(`NOTE: Because the "clean" option is enabled, no serviceworker will be build.`);
 
 	}else if(ewabConfig.serviceworker.add){
 
@@ -80,7 +80,6 @@ async function add(){
 		const workboxConfig = {
 			globDirectory: ewabConfig.workPath,
 			globPatterns: [ `**/*.{${coreFileExtensions.join(",")}}` ],
-			globIgnores: ewabConfig.serviceworker.experience === "website" ? [ "**/*" ] : undefined,
 			swDest: path.join(ewabConfig.workPath, serviceworkerName),
 			cacheId: ewabConfig.alias,
 			cleanupOutdatedCaches: true,
@@ -90,7 +89,7 @@ async function add(){
 		};
 
 		switch(ewabConfig.serviceworker.experience){
-			case "website":
+			case "online":
 				workboxConfig.runtimeCaching = [
 					{
 						urlPattern: ({ request }) => Boolean(request.destination === "image"),

@@ -65,6 +65,7 @@
     "minimatch": "^3.0.4",
     "object-hash": "^2.2.0",
     "pwa-asset-generator": "^4.2.1",
+    "ssim.js": "^3.5.0",
     "svgo": "^2.3.1",
     "terser": "^5.7.1",
     "tiny-async-pool": "^1.2.0",

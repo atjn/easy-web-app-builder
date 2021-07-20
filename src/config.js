@@ -21,6 +21,7 @@ export const defaults = {
 	configName: "ewabconfig",
 	interface: "modern",
 	imageExtension: "webp",
+	imageExtensions: ["webp", "jxl"],
 };
 
 export const logInterfaces = {
@@ -76,7 +77,7 @@ async function generateMain(callConfig){
 		{
 			glob: `${mainConfig.alias}/icons/**/*`,
 			images: {
-				minify: false,
+				compress: false,
 			},
 		},
 		{
@@ -281,7 +282,8 @@ const options = {
 
 		images: joi.object({
 
-			minify:				joi.boolean().default(true),
+			compress:			joi.boolean().default(true),
+			quality:			joi.number().min(0).max(1).default(0.999),
 			convert:			joi.boolean().default(true),
 			updateReferences:	joi.boolean().default(true),
 			keepOriginal:		joi.boolean().default(true),
@@ -290,7 +292,7 @@ const options = {
 
 			targetExtensions: joi.array().items(
 				joi.string().valid(...supportedImageExtensions),
-			),
+			).default(defaults.imageExtensions),
 
 			resize: joi.object({
 
@@ -313,7 +315,7 @@ const options = {
 
 			}),
 
-			directOptions: joi.object([...supportedImageExtensions].reverse().reduce((object, extension) => { return { [extension]: joi.object(), ...object }; }, {})),
+			encoderOptions: joi.object([...supportedImageExtensions].reverse().reduce((object, extension) => { return { [extension]: joi.object(), ...object }; }, {})),
 
 		}),
 
