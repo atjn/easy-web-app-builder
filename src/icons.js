@@ -2,7 +2,7 @@
 
 /**
  * @file
- * These functions handle
+ * These functions handle.
  */
 
 import path from "path";
@@ -231,6 +231,9 @@ async function add(){
 
 }
 
+/**
+ *
+ */
 async function ensureSourceIcon(){
 
 	if(ewabConfig.icons.source && !fileExists(path.join(ewabConfig.workPath, ewabConfig.icons.source))){

@@ -334,9 +334,17 @@ export const configOptions = joi.object({
 
 	...deepMerge(options.global, options.universal),
 
-	fileExceptions: joi.array().items(
-		joi.object(deepMerge(options.local, options.universal)),
-	).description("alter the settings for certain files"),
+	fileExceptions: joi.array().items(joi.object(
+		
+		deepMerge(
+			{remove: joi.boolean().default(false)},
+			deepMerge(
+				options.local, 
+				options.universal
+			)
+		)
+
+	)).description("alter the settings for certain files"),
 
 });
 

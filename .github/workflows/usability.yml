@@ -9,12 +9,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [14.13.x, 14.x, 16.0.x, 16.x]
+        node-version: [14.13.1, 14.x, 16.0.x, 16.x]
         os: [ubuntu-latest]
         include:
-          - node-version: 14.x
+          - node-version: 16.x
             os: windows-latest
-          - node-version: 14.x
+          - node-version: 16.x
             os: macOS-latest
 
     runs-on: ${{ matrix.os }}

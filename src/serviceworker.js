@@ -2,7 +2,7 @@
 
 /**
  * @file
- * fg
+ * fg.
  */
 
 import path from "path";

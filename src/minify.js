@@ -201,7 +201,7 @@ async function processItem(item){
 
 							log(`Minifying '${itemRelativePath}' with html-minifier-terser`);
 
-							const minifiedHTML = htmlMinifier(
+							const minifiedHTML = await htmlMinifier(
 								(await fs.readFile(item.path, "utf8")),
 								{
 									collapseBooleanAttributes: true,

@@ -76,6 +76,10 @@ const inserters = {
 	},
 };
 
+/**
+ * @param sourceObject
+ * @param commands
+ */
 function breakDownObject(sourceObject, commands){
 	const object = deepClone(sourceObject);
 	let workingObject = object;
@@ -97,6 +101,12 @@ function breakDownObject(sourceObject, commands){
 	};
 }
 
+/**
+ * @param object
+ * @param indentation
+ * @param options
+ * @param firstRun
+ */
 function printObject(object, indentation, options = {}, firstRun = true){
 
 	if(Object.keys(object ?? {}).length === 0) return "Object";
@@ -145,6 +155,9 @@ function printObject(object, indentation, options = {}, firstRun = true){
 }
 
 
+/**
+ *
+ */
 async function run(){ //workaround while waiting for top-level await support in ESLint: https://github.com/eslint/eslint/issues/14632
 
 	bar.begin("Building docs");

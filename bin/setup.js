@@ -1,7 +1,7 @@
 
 /**
  * @file
- * t
+ * t.
  */
 
 import inquirer from "inquirer";
@@ -21,6 +21,9 @@ import { findInputFolderCandidates, decideOutputFolderName } from "../src/files.
 import scaffold from "./scaffold.js";
 import { defaults } from "../src/config.js";
 
+/**
+ * @param args
+ */
 export default async function (args){
 
 	const p = "\n \n→";
@@ -28,14 +31,14 @@ export default async function (args){
 
 	console.log("");
 	console.log(chalk.bgCyan.black("  Welcome to the Easy Web App Builder (EWAB) setup wizard  "));
-	console.log(chalk.dim("This wizard covers everything a normal user needs. For advanced stuff, check this out: https://github.com/atjn/easy-web-app-builder#advanced"));
+	console.log(chalk.dim("This wizard covers everything a normal user needs. For advanced stuff, look here: https://github.com/atjn/easy-web-app-builder/#advanced"));
 	console.log("");
 	console.log(chalk.yellow(`NOTE: Some of these operations ${chalk.underline("will overwrite files")} in your project. Make sure to back up anything important first.`));
 
 	//Certain parts of ewabCOnfig must be defined in order to run some of EWABs functions:
 	global.ewabConfig = {
 		interface: "none",
-		alias: args.alias,
+		alias: "ewab",
 		rootPath: args.rootPath ?? process.cwd(),
 	};
 
@@ -201,9 +204,7 @@ export default async function (args){
 				for(const choice of choices){
 					allAnswers.config.fileExceptions.push({
 						glob: `**/*${choice}`,
-						files: {
-							remove: true,
-						},
+						remove: true,
 					});
 				}
 				return choices;
@@ -304,6 +305,9 @@ export default async function (args){
 
 }
 
+/**
+ * @param error
+ */
 function handleError(error){
 	if(error.isTtyError){
 		console.log("Sorry, but your terminal doesn't support TTY, which is required for this wizard to work. See this list to find a supported terminal: https://github.com/SBoudrias/Inquirer.js#support");
@@ -311,8 +315,11 @@ function handleError(error){
 		console.log(chalk.bgRed.black("  Sorry, something went wrong. You are welcome to file a bug with the following information at: https://github.com/atjn/easy-web-app-builder/issues/new/choose  "));
 		console.error(error);
 	}
-};
+}
 
+/**
+ * @param outputPath
+ */
 function normalizeOutputPaths(outputPath){
 	return path.isAbsolute(outputPath) ? path.relative(process.cwd(), outputPath) : outputPath;
 }

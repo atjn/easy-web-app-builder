@@ -8,6 +8,11 @@ import { getRootFileConfig } from "../src/config.js";
 import { ewabSourcePath } from "../src/tools.js";
 
 
+/**
+ * @param root0
+ * @param root0.type
+ * @param root0.inputPath
+ */
 export default async function ({type, inputPath}){
 
 	if(!inputPath){
