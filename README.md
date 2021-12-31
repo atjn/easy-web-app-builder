@@ -1,4 +1,8 @@
 # Easy Web App Builder (EWAB)
+
+| :warning: | This software is still under development. Expect bad documentation, weird bugs, missing features, and a constant flood of breaking changes. |
+|-----------|---------------------------------------------------------------------------------------------------------------------------------------------|
+
 EWAB automates all the boring stuff you need to do when publishing a webapp. It will:
 
 - Generate icons in all necessary sizes and link to them in your html and manifest files.
