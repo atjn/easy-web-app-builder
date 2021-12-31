@@ -340,9 +340,9 @@ export const configOptions = joi.object({
 			{remove: joi.boolean().default(false)},
 			deepMerge(
 				options.local, 
-				options.universal
-			)
-		)
+				options.universal,
+			),
+		),
 
 	)).description("alter the settings for certain files"),
 

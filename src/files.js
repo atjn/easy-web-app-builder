@@ -10,7 +10,7 @@ import fs from "fs-extra";
 import os from "os";
 
 import { log } from "./log.js";
-import { fileExists, folderExists, resolveURL, getSubfolders } from "./tools.js";
+import { fileExists, folderExists, resolveURL, getSubfolders, ewabPackage } from "./tools.js";
 import { defaults } from "./config.js";
 
 import glob from "tiny-glob";
@@ -147,7 +147,7 @@ async function begin(){
 
 	await fs.ensureDir(path.join(ewabConfig.rootPath, ewabConfig.inputPath));
 	await fs.ensureDir(path.join(ewabConfig.rootPath, ewabConfig.outputPath));
-	ewabConfig.workPath = await fs.mkdtemp(path.join(os.tmpdir(), "node-easy-web-app-builder-"));
+	ewabConfig.workPath = await fs.mkdtemp(path.join(os.tmpdir(), `node-${ewabPackage.name}-`));
 
 	log(`Copying source files from '${path.join(ewabConfig.inputPath)}' to the work folder at '${path.relative(ewabConfig.rootPath, ewabConfig.workPath)}'`);
 
@@ -238,7 +238,7 @@ async function begin(){
 	}
 
 	if(!ewabConfig.manifestPath){
-		log("warning", `No site manifest found, so using a generic one instead. You can generate one in your source folder with the command: easy-web-app-builder scaffold "manifest"`);
+		log("warning", `No site manifest found, so using a generic one instead. You can generate one in your source folder with the command: ${ewabPackage.name} scaffold "manifest"`);
 		await fs.copy(path.join(ewabRuntime.sourcePath, "lib/scaffolding/manifest.json"), path.join(ewabConfig.workPath, "manifest.json"));
 		await readManifest(path.join(ewabConfig.workPath, "manifest.json"));
 	}

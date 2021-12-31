@@ -11,6 +11,7 @@ import { hideBin } from "yargs/helpers";
 
 import ewab from "../src/ewab.js";
 import { defaults } from "../src/config.js";
+import { ewabPackage } from "../src/tools.js";
 
 import setup from "./setup.js";
 import scaffold from "./scaffold.js";
@@ -33,7 +34,7 @@ const args = yargs(hideBin(process.argv))
 		default: "{}",
 		description: "Pass a JSON config object. Values defined here will override the values in the config file.",
 	})
-	.command(["setup", "wizard", "guide", "initialize", "init"], "Opens a wizard to help set up easy-web-app-builder.")
+	.command(["setup", "wizard", "guide", "initialize", "init"], `Opens a wizard to help set up ${ewabPackage.name}.`)
 	.command(["scaffold", "template"], "Add some template files to the source website to help you get started.", yargs => {
 		yargs
 			.positional("type", {

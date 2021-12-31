@@ -16,7 +16,7 @@ import glob from "tiny-glob";
 import path from "path";
 import fs from "fs-extra";
 
-import { fileExists, deepMerge } from "../src/tools.js";
+import { fileExists, deepMerge, ewabPackage } from "../src/tools.js";
 import { findInputFolderCandidates, decideOutputFolderName } from "../src/files.js";
 import scaffold from "./scaffold.js";
 import { defaults } from "../src/config.js";
@@ -35,7 +35,7 @@ export default async function (args){
 	console.log("");
 	console.log(chalk.yellow(`NOTE: Some of these operations ${chalk.underline("will overwrite files")} in your project. Make sure to back up anything important first.`));
 
-	//Certain parts of ewabCOnfig must be defined in order to run some of EWABs functions:
+	//Certain parts of ewabConfig must be defined in order to run some of EWABs functions:
 	global.ewabConfig = {
 		interface: "none",
 		alias: "ewab",
@@ -128,7 +128,7 @@ export default async function (args){
 			default: "public",
 			filter: rawPath => {
 				const normalizedPath = normalizeOutputPaths(rawPath);
-				allAnswers.inputPath = normalizedPath;
+				allAnswers.outputPath = normalizedPath;
 				return normalizedPath;
 			},
 		},
@@ -291,7 +291,7 @@ export default async function (args){
 			name: "configName",
 			type: "input",
 			prefix: p, suffix: s,
-			message: `Alright, what should I call it then?\n  ${chalk.dim(`When you call EWAB, you'll have to use 'easy-web-app-builder --config-name "yourconfigname"' for it to read your preferences.`)}`,
+			message: `Alright, what should I call it then?\n  ${chalk.dim(`When you call EWAB, you'll have to use '${ewabPackage.name} --config-name "yourconfigname"' for it to read your preferences.`)}`,
 			default: defaults.configName,
 		},
 
@@ -301,6 +301,34 @@ export default async function (args){
 
 	const configFile = `\n/**\n * @file\n * Configuration script for eay-webapp.\n */\n\nexport default ${JSON.stringify(allAnswers.config, null, 2)}\n`;
 	await fs.writeFile(path.join(process.cwd(), allAnswers.useDefaultConfigName ? `.${defaults.configName}.js` : `.${allAnswers.configName}.js`), configFile);
+	
+	await prompt([
+		{
+			when: async () => {
+				const filePath = path.join(process.cwd(), ".gitignore");
+				if(fileExists(filePath)){
+					const contents = await fs.readFile(filePath, "utf-8");
+					return !contents.includes(ewabPackage.name) && !contents.includes(global.ewabConfig.alias);
+				}
+				return false;
+			},
+			name: "addGitIgnoreEntries",
+			type: "list",
+			prefix: p, suffix: s,
+			message: `Should I configure Git to ignore build and cache files from EWAB?`,
+			choices: [
+				"Yes",
+				"No",
+			],
+			filter: answer => Boolean(answer === "Yes"),
+		},
+	])
+	.then(answers => allAnswers = deepMerge(allAnswers, answers))
+	.catch(error => handleError(error));
+
+	if(allAnswers.addGitIgnoreEntries){
+		fs.appendFile(path.join(process.cwd(), ".gitignore"), `\n\n# Ignore output from ${ewabPackage.name}:\n.${global.ewabConfig.alias}-cache\n${allAnswers.outputFolderNameIsCool ? outputFolderName : allAnswers.config.outputPath}\n\n`);
+	}
 
 
 }
@@ -310,7 +338,7 @@ export default async function (args){
  */
 function handleError(error){
 	if(error.isTtyError){
-		console.log("Sorry, but your terminal doesn't support TTY, which is required for this wizard to work. See this list to find a supported terminal: https://github.com/SBoudrias/Inquirer.js#support");
+		console.log("Sorry, but your terminal doesn't support TTY, which is required for this wizard to work. See this list to find a supported terminal: https://github.com/SBoudrias/Inquirer.js/#support");
 	}else{
 		console.log(chalk.bgRed.black("  Sorry, something went wrong. You are welcome to file a bug with the following information at: https://github.com/atjn/easy-web-app-builder/issues/new/choose  "));
 		console.error(error);

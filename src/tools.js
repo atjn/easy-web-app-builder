@@ -119,8 +119,8 @@ export function getSubfolders(folderPath){
 		.map(entry => entry.name);
 }
 
-/**
- * Checks if a file exists at a certain path.
+/**.
+ * Checks if a file exists at a certain path. (synhcronous)
  * 
  * @param	{string}	filePath	- Absolute path of the file to check.
  * 
