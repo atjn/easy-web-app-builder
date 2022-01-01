@@ -39,9 +39,9 @@ const args = yargs(hideBin(process.argv))
 		yargs
 			.positional("type", {
 				type: "string",
-				default: "app",
-				choices: ["app", "index", "manifest"],
-				description: "What files should be scaffolded?",
+				default: "all",
+				choices: ["all", "all-overwrite", "index", "manifest"],
+				description: "What files should be scaffolded? ('all' will scaffold all files that don't already exist. 'all-overwrite' will also overwrite files that already exist)",
 			});
 	})
 	.strict()
@@ -58,7 +58,7 @@ if(args._.length > 0){
 			setup(args);
 			break;
 		case "scaffold":
-			scaffold(args.type);
+			scaffold({type: args.type});
 			break;
 	}
 }else{
