@@ -17,9 +17,10 @@
   "scripts": {
     "lint:js": "eslint --fix \"**/*.js\"",
     "lint": "npm run lint:js",
+    "build:docs": "node \"docs-source/build.js\"",
+    "build": "npm run build:docs",
     "test:usability": "",
-    "test": "npm install && npm run lint && npm run test:usability",
-    "build-docs": "node \"docs-source/build.js\""
+    "test": "npm install && npm run build && npm run lint && npm run test:usability"
   },
   "repository": {
     "type": "git",
@@ -45,7 +46,7 @@
   "bugs": {
     "url": "https://github.com/atjn/easy-web-app-builder/issues"
   },
-  "homepage": "https://github.com/atjn/easy-web-app-builder/#readme",
+  "homepage": "https://github.com/atjn/easy-web-app-builder#readme",
   "dependencies": {
     "@squoosh/lib": "^0.4.0",
     "chalk": "^5.0.0",
@@ -74,9 +75,9 @@
     "yargs": "^17.3.1"
   },
   "devDependencies": {
-    "@atjn/eslint-config": "^4.0.0",
-    "eslint": "^8.5.0",
-    "eslint-plugin-jsdoc": "^37.4.2",
+    "@atjn/eslint-config": "^4.1.0",
+    "eslint": "^8.6.0",
+    "eslint-plugin-jsdoc": "^37.5.0",
     "eslint-plugin-promise": "^6.0.0"
   }
 }

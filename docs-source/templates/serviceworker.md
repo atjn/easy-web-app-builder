@@ -39,7 +39,7 @@ These resources update fairly often, so while it is okay to use a cached version
 By default, nothing is given this label.
 
 #### `online`
-These resources are so time sensitive, that it is better to wait for a fresh copy from the server,than to use something from the cache.
+These resources are so time sensitive, that it is better to wait for a fresh copy from the server, than to use something from the cache.
 
 By default, nothing is given this label.
 

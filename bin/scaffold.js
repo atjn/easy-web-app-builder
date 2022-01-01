@@ -14,6 +14,7 @@ import chalk from "chalk";
  * @param root0
  * @param root0.type
  * @param root0.inputPath
+ * @param root0.silent
  */
 export default async function ({type, inputPath, silent}){
 	
@@ -41,6 +42,9 @@ export default async function ({type, inputPath, silent}){
 			break;
 	}
 
+	/**
+	 * @param message
+	 */
 	function finish(message){
 		if(!silent) console.log(chalk.bold.cyan(` ${message}`));
 	}	

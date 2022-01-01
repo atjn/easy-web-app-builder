@@ -154,43 +154,34 @@ function printObject(object, indentation, options = {}, firstRun = true){
 
 }
 
+bar.begin("Building docs");
 
-/**
- *
- */
-async function run(){ //workaround while waiting for top-level await support in ESLint: https://github.com/eslint/eslint/issues/14632
+await fs.remove(path.join(ewabSourcePath, "docs"));
+await fs.copy(path.join(ewabSourcePath, "docs-source/templates"), path.join(ewabSourcePath, "docs"));
 
-	bar.begin("Building docs");
+const markdownPaths = await glob("**/*.{md}", {cwd: path.join(ewabSourcePath, "docs"), absolute: true});
 
-	await fs.remove(path.join(ewabSourcePath, "docs"));
-	await fs.copy(path.join(ewabSourcePath, "docs-source/templates"), path.join(ewabSourcePath, "docs"));
+for(const markdownPath of markdownPaths){
+	bar(markdownPaths.indexOf(markdownPath) / markdownPaths.length, `Generating ${path.relative(ewabSourcePath, markdownPath)}`);
 
-	const markdownPaths = await glob("**/*.{md}", {cwd: path.join(ewabSourcePath, "docs"), absolute: true});
+	let doc = await fs.readFile(markdownPath, "utf-8");
 
-	for(const markdownPath of markdownPaths){
-		bar(markdownPaths.indexOf(markdownPath) / markdownPaths.length, `Generating ${path.relative(ewabSourcePath, markdownPath)}`);
+	if(!markdownPath.includes("main.md")) doc = `insert[backButton]\n${doc}`;
 
-		let doc = await fs.readFile(markdownPath, "utf-8");
+	for(const match of doc.matchAll(/(?:^|\W)(?<snippet>insert\[(?<command>[^\]]*?)\])(?:\W|$)/gu)){
 
-		if(!markdownPath.includes("main.md")) doc = `insert[backButton]\n${doc}`;
+		const command = match.groups.command.split(" ");
 
-		for(const match of doc.matchAll(/(?:^|\W)(?<snippet>insert\[(?<command>[^\]]*?)\])(?:\W|$)/gu)){
-
-			const command = match.groups.command.split(" ");
-
-			doc = doc.replace(match.groups.snippet, await inserters[command.shift()](command));
-			
-		}
-
-		doc += `\n---\n<p style="opacity:.8;font-style:italic;text-align:right">This documentation was generated for <a href="${ewabPackage.homepage}">Easy Web App Builder</a> ${ewabPackage.version}</p>\n`;
-
-		await fs.writeFile(markdownPath, doc);
+		doc = doc.replace(match.groups.snippet, await inserters[command.shift()](command));
+		
 	}
 
-	await fs.move(path.join(ewabSourcePath, "docs/main.md"), path.join(ewabSourcePath, "README.md"), {overwrite: true});
+	doc += `\n---\n<p style="opacity:.8;font-style:italic;text-align:right">This documentation was generated for <a href="${ewabPackage.homepage}">Easy Web App Builder</a> ${ewabPackage.version}</p>\n`;
 
-	bar.end("Build docs");
-	log("modern-only", "");
-
+	await fs.writeFile(markdownPath, doc);
 }
-run();
+
+await fs.move(path.join(ewabSourcePath, "docs/main.md"), path.join(ewabSourcePath, "README.md"), {overwrite: true});
+
+bar.end("Build docs");
+log("modern-only", "");

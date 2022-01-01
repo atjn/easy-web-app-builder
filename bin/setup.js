@@ -33,7 +33,7 @@ export default async function (args){
 
 	console.log("");
 	console.log(chalk.bgCyan.black("  Welcome to the Easy Web App Builder (EWAB) setup wizard  "));
-	console.log(chalk.dim("This wizard covers everything a normal user needs. For advanced stuff, look here: https://github.com/atjn/easy-web-app-builder/#advanced"));
+	console.log(chalk.dim("This wizard covers everything a normal user needs. For advanced stuff, look here: https://github.com/atjn/easy-web-app-builder#advanced"));
 	console.log("");
 	console.log(chalk.yellow(`NOTE: Some of these operations ${chalk.underline("will overwrite files")} in your project. Make sure to back up anything important first.`));
 
@@ -47,7 +47,7 @@ export default async function (args){
 	const inputFolderCandidates = findInputFolderCandidates(global.ewabConfig.rootPath);
 
 	let allAnswers = {};
-	let metaData = {};
+	const metaData = {};
 	await runPrompt({
 		ui: [
 			{
@@ -245,7 +245,8 @@ export default async function (args){
 				prefix: p, suffix: s,
 				message: () => `I noticed that your project contains some build files. (${allAnswers.unsupportedExtensions.join(", ")})\n  Maybe you have already taken this into account, but just remember that EWAB doesn't support any of these files.\n  If you have a build step, I would recommend running it before EWAB, then posting the output into EWABs input folder.\n  \n  Should I set up rules that remove these files automatically? Choose the ones that should be removed.`,
 				choices: () => allAnswers.unsupportedExtensions,
-				filter: choices => {fs.emptyDirSync(metaData.absoluteInputPath);
+				filter: choices => {
+					fs.emptyDirSync(metaData.absoluteInputPath);
 					for(const choice of choices){
 						allAnswers.config.fileExceptions.push({
 							glob: `**/*${choice}`,
@@ -385,11 +386,17 @@ export default async function (args){
 	});
 
 
+	/**
+	 * @param handler
+	 */
 	async function runIntermediate(handler){
 		await handler()
 		.catch(error => handleError(error));
 	}
 
+	/**
+	 * @param promptData
+	 */
 	async function runPrompt(promptData){
 
 		await prompt(promptData.ui)
@@ -411,7 +418,7 @@ export default async function (args){
  */
 function handleError(error){
 	if(error.isTtyError){
-		console.log("Sorry, but your terminal doesn't support TTY, which is required for this wizard to work. See this list to find a supported terminal: https://github.com/SBoudrias/Inquirer.js/#support");
+		console.log("Sorry, but your terminal doesn't support TTY, which is required for this wizard to work. See this list to find a supported terminal: https://github.com/SBoudrias/Inquirer.js#support");
 	}else{
 		console.log(chalk.bgRed.black("  Sorry, something went wrong. You are welcome to file a bug with the following information at: https://github.com/atjn/easy-web-app-builder/issues/new/choose  "));
 		console.error(error);
