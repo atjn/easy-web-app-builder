@@ -57,7 +57,7 @@
     "folder-hash": "^4.0.2",
     "fs-extra": "^10.1.0",
     "html-minifier-terser": "^6.1.0",
-    "inquirer": "^9.0.0",
+    "inquirer": "^8.2.2",
     "inquirer-file-tree-selection-prompt": "^1.0.19",
     "joi": "^17.6.0",
     "jsdom": "^20.0.0",
