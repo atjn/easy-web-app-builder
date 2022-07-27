@@ -4,7 +4,10 @@
   "description": "Make your website better with one command.",
   "type": "module",
   "exports": "./src/ewab.js",
-  "bin": "./bin/cli.js",
+  "bin": {
+    "easy-web-app-builder": "./bin/cli.js",
+    "ewab":  "./bin/cli.js"
+  },
   "files": [
     "/bin/*",
     "/docs/*",
