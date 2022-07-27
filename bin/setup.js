@@ -75,7 +75,7 @@ export default async function (args){
 				name: "config.inputPath",
 				type: "list",
 				prefix: p, suffix: s,
-				message: `EWAB thinks that the source files for your website are in the folder called '${inputFolderCandidates[0].name}'. Is that correct?`,
+				message: `EWAB thinks that the source files for your website are in the folder called '${inputFolderCandidates[0]?.name}'. Is that correct?`,
 				choices: [
 					"Yes!",
 					"No",
@@ -83,7 +83,7 @@ export default async function (args){
 				filter: answer => {
 					if(answer === "Yes!"){
 						allAnswers.inputFolderCandidateIsValid = true;
-						allAnswers.inputPath = inputFolderCandidates[0].name;
+						allAnswers.inputPath = inputFolderCandidates[0]?.name;
 					}
 					return undefined;
 				},
