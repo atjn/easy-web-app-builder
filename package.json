@@ -72,7 +72,7 @@
     "ssim.js": "^3.5.0",
     "svgo": "^2.8.0",
     "terser": "^5.14.2",
-    "tiny-async-pool": "^2.1.0",
+    "tiny-async-pool": "^1.3.0",
     "tiny-glob": "^0.2.9",
     "workbox-build": "^6.5.4",
     "yargs": "^17.5.1"
