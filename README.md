@@ -45,20 +45,20 @@ If you'd rather set things up manually, you can do so by adding a file called ".
 ```js
 export default {
 
-	outputPath: "build/ewab",
+  outputPath: "build/ewab",
 
-	serviceworker: {
-		add: true,
-	},
+  serviceworker: {
+    add: true,
+  },
 
-	fileExceptions: [
-		{
-			glob: "**/*.dev.*",
-			files: {
-				remove: true,
-			},
-		},
-	],
+  fileExceptions: [
+    {
+      glob: "**/*.dev.*",
+      files: {
+        remove: true,
+      },
+    },
+  ],
 };
 ```
 You can also pass a JSON configuration to EWAB through the CLI:
@@ -134,4 +134,4 @@ EWAB won't add a serviceworker by default because it requires a bit of manual se
 Go to the [serviceworker configuration guide](./docs/serviceworker.md).
 
 ---
-<p style="opacity:.8;font-style:italic;text-align:right">This documentation was generated for <a href="https://github.com/atjn/easy-web-app-builder/#readme">Easy Web App Builder</a> 1.0.0-beta1</p>
+<p style="opacity:.8;font-style:italic;text-align:right">This documentation was generated for <a href="https://github.com/atjn/easy-web-app-builder#readme">Easy Web App Builder</a> 1.0.0-beta1</p>
