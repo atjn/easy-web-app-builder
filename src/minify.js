@@ -131,12 +131,9 @@ async function minify(type){
 		concurrentThreads,
 		itemProcessingQueue,
 		async item => {
-			await processItem(item)
-			.then(() => {
-				completedItemProcesses++;
-				bar(completedItemProcesses / itemProcessingQueue.length);
-				return;
-			});
+			await processItem(item);
+			completedItemProcesses++;
+			bar(completedItemProcesses / itemProcessingQueue.length);
 		},
 	);
 
@@ -735,7 +732,7 @@ function processResizeSettings(resizeConfig, originalSize){
 						2160, //UHD - Portrait
 						2560, //QHD - Landscape
 						1440, //QHD - Portrait
-						1920, //SHD - Lanscape
+						1920, //SHD - Landscape
 						1080, //SHD - Portrait
 					]
 					.map(screenWidth => {
