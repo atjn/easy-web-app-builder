@@ -126,6 +126,10 @@ export function getSubfolders(folderPath){
  * 
  * @returns	{boolean}	- Wether the file exists or not.
  */
+/**
+ *
+ * @param filePath
+ */
 export function fileExists(filePath){
 
 	return Boolean(fs.existsSync(filePath) && fs.lstatSync(filePath).isFile());

@@ -204,7 +204,7 @@ const options = {
 
 	global: {
 
-		alias: joi.string().default(defaults.alias).description("the name EWAB uses when adding elements to the web app"),
+		alias: joi.string().default(defaults.alias).pattern(/^[a-zA-Z][0-9a-zA-Z_]*[a-zA-Z]$/um, "symbol").description("the name EWAB uses when adding elements to the web app"),
 
 		interface: joi.string().default(defaults.interface).description("how progress is logged to the console")
 			.valid(...Object.keys(logInterfaces)),

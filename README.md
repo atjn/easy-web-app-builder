@@ -45,20 +45,20 @@ If you'd rather set things up manually, you can do so by adding a file called ".
 ```js
 export default {
 
-  outputPath: "build/ewab",
+	outputPath: "build/ewab",
 
-  serviceworker: {
-    add: true,
-  },
+	serviceworker: {
+		add: true,
+	},
 
-  fileExceptions: [
-    {
-      glob: "**/*.dev.*",
-      files: {
-        remove: true,
-      },
-    },
-  ],
+	fileExceptions: [
+		{
+			glob: "**/*.dev.*",
+			files: {
+				remove: true,
+			},
+		},
+	],
 };
 ```
 You can also pass a JSON configuration to EWAB through the CLI:

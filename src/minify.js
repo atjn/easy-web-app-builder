@@ -529,7 +529,7 @@ async function processItem(item){
 
 	}catch(error){
 
-		if(error.includes("has an unsupported format")){
+		if(String(error).includes("has an unsupported format")){
 			log("warning", `Was not able to read '${itemRelativePath}', it will not be compressed.`);
 		}else{
 			log("warning", `Unable to compress '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);

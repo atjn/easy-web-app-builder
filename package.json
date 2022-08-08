@@ -6,7 +6,7 @@
   "exports": "./src/ewab.js",
   "bin": {
     "easy-web-app-builder": "./bin/cli.js",
-    "ewab":  "./bin/cli.js"
+    "ewab": "./bin/cli.js"
   },
   "files": [
     "/bin/*",
