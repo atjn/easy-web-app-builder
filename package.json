@@ -19,12 +19,14 @@
   },
   "scripts": {
     "lint:js": "eslint --fix \"**/*.js\"",
+    "lint:js:nofix": "eslint \"**/*.js\"",
     "lint": "npm run lint:js",
-    "build:docs": "node \"docs-source/build.js\"",
-    "build": "npm run build:docs",
+    "lint:nofix": "npm run lint:js:nofix",
+    "build:docs": "node \"build/docs.js\"",
     "build:workbox": "node \"build/workbox.js\"",
+    "build": "npm run build:docs && npm run build:workbox",
     "test:usability": "",
-    "test": "npm install && npm run build && npm run lint && npm run test:usability"
+    "test": "npm install && npm run build && npm run lint:nofix && npm run test:usability"
   },
   "repository": {
     "type": "git",
@@ -82,7 +84,6 @@
     "@atjn/eslint-config": "^5.1.0",
     "eslint": "^8.20.0",
     "eslint-plugin-jsdoc": "^39.3.3",
-    "eslint-plugin-promise": "^6.0.0"
     "eslint-plugin-promise": "^6.0.0",
     "workbox-window": "6.5.x"
   }

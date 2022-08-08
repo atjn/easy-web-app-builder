@@ -6,7 +6,7 @@ const describedConfig = configOptions.describe();
 import fs from "fs-extra";
 import path from "path";
 import { ewabSourcePath, ewabPackage, deepClone } from "../src/tools.js";
-import { log, bar  } from "../src/log.js";
+import { log, bar } from "../src/log.js";
 
 import glob from "tiny-glob";
 
@@ -157,7 +157,7 @@ function printObject(object, indentation, options = {}, firstRun = true){
 bar.begin("Building docs");
 
 await fs.remove(path.join(ewabSourcePath, "docs"));
-await fs.copy(path.join(ewabSourcePath, "docs-source/templates"), path.join(ewabSourcePath, "docs"));
+await fs.copy(path.join(ewabSourcePath, "docs-source"), path.join(ewabSourcePath, "docs"));
 
 const markdownPaths = await glob("**/*.{md}", {cwd: path.join(ewabSourcePath, "docs"), absolute: true});
 
