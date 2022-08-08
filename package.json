@@ -63,8 +63,8 @@
     "folder-hash": "^4.0.2",
     "fs-extra": "^10.1.0",
     "html-minifier-terser": "^6.1.0",
-    "inquirer": "^8.2.3",
-    "inquirer-file-tree-selection-prompt": "^1.0.19",
+    "inquirer": "^9.1.0",
+    "inquirer-file-tree-selection-prompt": "2.0.4",
     "joi": "^17.6.0",
     "jsdom": "^20.0.0",
     "lodash": "^4.17.21",
@@ -82,8 +82,8 @@
   },
   "devDependencies": {
     "@atjn/eslint-config": "^5.1.0",
-    "eslint": "^8.20.0",
-    "eslint-plugin-jsdoc": "^39.3.3",
+    "eslint": "^8.21.0",
+    "eslint-plugin-jsdoc": "^39.3.4",
     "eslint-plugin-promise": "^6.0.0",
     "workbox-window": "6.5.x"
   }
