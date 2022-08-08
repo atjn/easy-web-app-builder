@@ -30,24 +30,28 @@ async function link(){
 
 		bar.begin(ewabConfig.serviceworker.clean ? "Adding serviceworker cleaner" : "Linking to serviceworker");
 
-		log(`Adding the serviceworker register script to the project.`);
+		await fs.copy(path.join(ewabRuntime.sourcePath, "lib/workbox-window.js"), path.join(ewabConfig.workPath, ewabConfig.alias, "workbox-window.js"));
+
+		log(`Adding the serviceworker elements to the project.`);
+		await fs.copy(path.join(ewabRuntime.sourcePath, "lib/dialogs.js"), path.join(ewabConfig.workPath, ewabConfig.alias, "dialogs.js"));
+
 		let adderCode = await fs.readFile(path.join(ewabRuntime.sourcePath, "lib/serviceworker-bridge.js"), "utf8");
-		adderCode = adderCode
-			.replace(`mode = "add"`, `mode = "${ewabConfig.serviceworker.clean ? "clean" : "add"}"`)
-			.replace(`alias = "ewab"`, `alias = "${ewabConfig.alias}"`)
-			.replace(`debug = false`, `debug = ${ewabConfig.serviceworker.debug}`);
+		adderCode = adderCode.replace(/const settings = \{.*?\}/us, `const settings = ${JSON.stringify({
+			alias: ewabConfig.alias,
+			...ewabConfig.serviceworker,
+		}, null, 2)}`);
 
 		await fs.writeFile(path.join(ewabConfig.workPath, ewabConfig.alias, "serviceworker-bridge.js"), adderCode);
 
 		bar(.1);
 
 		for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
-			log(`Linking to the serviceworker bridge in ${path.relative(ewabConfig.workPath, markupPath)}.`);
+			log(`Adding serviceworker elements to ${path.relative(ewabConfig.workPath, markupPath)}.`);
 
 			const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
 
-			const script = html.window.document.createElement("script"); script.src = `${ewabConfig.alias}/serviceworker-bridge.js`; script.type = "module"; script.defer = true;
-			html.window.document.head.appendChild(script);
+			const bridge = html.window.document.createElement("script"); bridge.src = `${ewabConfig.alias}/serviceworker-bridge.js`; bridge.type = "module";
+			html.window.document.head.appendChild(bridge);
 		
 			await fs.writeFile(markupPath, html.window.document.documentElement.outerHTML);
 
@@ -88,112 +92,84 @@ async function add(){
 			sourcemap: ewabConfig.serviceworker.debug,
 		};
 
-		switch(ewabConfig.serviceworker.experience){
-			case "online":
-				workboxConfig.runtimeCaching = [
-					{
-						urlPattern: ({ request }) => Boolean(request.destination === "image"),
-						handler: "StaleWhileRevalidate",
-						options: {
-							cacheName: `${ewabConfig.alias}-images`,
-							expiration: {
-								maxAgeSeconds: 60 * 60 * 24 * 30,
-								purgeOnQuotaError: true,
-							},
-						},
+
+		/*
+		Needs to check for these headers to determine if cache has been updated:
+			'content-length',
+			'etag',
+			'last-modified',
+			*/
+		workboxConfig.runtimeCaching = [
+			{
+				urlPattern: ({ request }) => Boolean(["image", "font"].includes(request.destination)),
+				handler: "CacheFirst",
+				options: {
+					cacheName: `${ewabConfig.alias}-static`,
+					expiration: {
+						maxAgeSeconds: 15,  //60* 60 * 24 * 20,
+						purgeOnQuotaError: true,
 					},
-					{
-						urlPattern: ({ request }) => Boolean(!["", "audio", "track", "video"].includes(request.destination)),
-						handler: "NetworkFirst",
-						options: {
-							cacheName: `${ewabConfig.alias}-backup`,
-							networkTimeoutSeconds: 15,
-							expiration: {
-								maxAgeSeconds: 60 * 60 * 24 * 30,
-							},
-						},
-					},
-				];
-				break;
-			case "app":
-				/*
-				Needs to check for these headers to determine if cache has been updated:
-					'content-length',
-					'etag',
-					'last-modified',
-				 */
-				workboxConfig.runtimeCaching = [
-					{
-						urlPattern: ({ request }) => Boolean(["image", "font"].includes(request.destination)),
-						handler: "CacheFirst",
-						options: {
-							cacheName: `${ewabConfig.alias}-static`,
-							expiration: {
-								maxAgeSeconds: 15,  //60* 60 * 24 * 20,
-								purgeOnQuotaError: true,
-							},
-							plugins: [
-								{
-									cachedResponseWillBeUsed: true ? undefined : async ({ cacheName, request, cachedResponse }) => {
+					plugins: [
+						{
+							cachedResponseWillBeUsed: true ? undefined : async ({ cacheName, request, cachedResponse }) => {
 
-										if(cachedResponse){
+								if(cachedResponse){
 
-											/**
-											 * If the resource was cached more than 7 days ago (or it cannot be determined), update the resource in the cache.
-											 * This check runs asynchronously to avoid slowing down the currently loading resource.
-											 */
-											(async () => {
-												let refreshCache = false;
+									/**
+									 * If the resource was cached more than 7 days ago (or it cannot be determined), update the resource in the cache.
+									 * This check runs asynchronously to avoid slowing down the currently loading resource.
+									 */
+									(async () => {
+										let refreshCache = false;
 
-												if(!cachedResponse.headers.has("date")){
-													refreshCache = true;
-												}else{
-													const cachedTime = (new Date(cachedResponse.headers.get("date"))).getTime();
-													if(isNaN(cachedTime) || (Date.now() + (1000 * 60 * 60 * 24 * 7) > cachedTime)){
-														refreshCache = true;
-													}
-												}refreshCache = false;
+										if(!cachedResponse.headers.has("date")){
+											refreshCache = true;
+										}else{
+											const cachedTime = (new Date(cachedResponse.headers.get("date"))).getTime();
+											if(isNaN(cachedTime) || (Date.now() + (1000 * 60 * 60 * 24 * 7) > cachedTime)){
+												refreshCache = true;
+											}
+										}refreshCache = false;
 
-												if(refreshCache){
-													caches.open(cacheName).then(async cache => {
-														await cache.put(request, (await fetch(request)));
-														return;
-													}).catch(error => {
-														console.log(error);
-													});
-												}
-											})();
-
+										if(refreshCache){
+											caches.open(cacheName).then(async cache => {
+												await cache.put(request, (await fetch(request)));
+												return;
+											}).catch(error => {
+												console.log(error);
+											});
 										}
-										return cachedResponse;
+									})();
 
-									},
-								},
-							],
-						},
-					},
-					{
-						urlPattern: ({ request }) => Boolean(["document", "script", "style"].includes(request.destination)),
-						handler: "StaleWhileRevalidate",
-						options: {
-							cacheName: `${ewabConfig.alias}-dynamic-core`,
-							expiration: {
-								maxAgeSeconds: 60 * 60 * 24 * 30,
-								purgeOnQuotaError: true,
+								}
+								return cachedResponse;
+
 							},
-							plugins: [
-								{
-									handlerWillStart: ewabConfig.serviceworker.debug ?
-										async () => {
-											console.warn("This file ↑ does not have a defined %ccachingType%c so EWAB is defaulting to %cdynamic%c.\nYou can read more about this issue here:", "", "", "", "");
-										} :
-										undefined,
-								},
-							],
 						},
+					],
+				},
+			},
+			{
+				urlPattern: ({ request }) => Boolean(["document", "script", "style"].includes(request.destination)),
+				handler: "StaleWhileRevalidate",
+				options: {
+					cacheName: `${ewabConfig.alias}-dynamic-core`,
+					expiration: {
+						maxAgeSeconds: 60 * 60 * 24 * 30,
+						purgeOnQuotaError: true,
 					},
-				];
-		}
+					plugins: [
+						{
+							handlerWillStart: ewabConfig.serviceworker.debug ?
+								async () => {
+									console.warn("This file ↑ does not have a defined %ccachingType%c so EWAB is defaulting to %cdynamic%c.\nYou can read more about this issue here:", "", "", "", "");
+								} :
+								undefined,
+						},
+					],
+				},
+			},
+		];
 		
 		const hash = {
 			"sourceHash": (await folderHash(ewabConfig.workPath, {

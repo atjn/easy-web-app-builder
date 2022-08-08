@@ -248,17 +248,16 @@ const options = {
 			add: joi.boolean().default(false),
 
 			clean: joi.boolean().default(false),
-			
-			experience: joi.string()
-				.valid("online", "app"),
 
 			debug: joi.boolean().default(false),
 
 			networkTimeoutSeconds: joi.number().positive().default(4),
 
-			displayUpdateButton: joi.boolean().default(true),
+			displayUpdateDialog: joi.boolean().default(true),
 
-			displayOfflineBanner: joi.boolean().default(true),
+			instantUpdateWindowSeconds: joi.number().integer().positive().default(2),
+
+			periodicUpdateCheckHours: joi.number().integer().positive().default(1),
 
 			customRules:  joi.array().items(
 				joi.object(),

@@ -46,11 +46,11 @@ This is an overview of the entire configuration file.
   serviceworker: {
     add: Boolean: false
     clean: Boolean: false
-    experience: String ("online", "app")
     debug: Boolean: false
     networkTimeoutSeconds: Number: 4
-    displayUpdateButton: Boolean: true
-    displayOfflineBanner: Boolean: true
+    displayUpdateDialog: Boolean: true
+    instantUpdateWindowSeconds: Number: 2
+    periodicUpdateCheckHours: Number: 1
     customRules: [
       Object
     ],
