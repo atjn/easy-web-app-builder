@@ -83,15 +83,9 @@ async function generateMain(callConfig){
 			},
 		},
 		{
-			glob: `${mainConfig.alias}/**/*)`,
+			glob: `${mainConfig.alias}/**/*`,
 			files: {
-				addSourceMaps: mainConfig.serviceworker.debug,
-			},
-		},
-		{
-			glob: `**/@(${mainConfig.alias}-serviceworker.js)`,
-			files: {
-				minify: false,
+				module: true,
 			},
 		},
 	);
@@ -274,6 +268,8 @@ const options = {
 		files: joi.object({
 
 			minify: joi.boolean().default(true),
+
+			module: joi.boolean(),
 
 			addSourceMaps: joi.boolean().default(true),
 

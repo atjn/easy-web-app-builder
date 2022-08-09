@@ -11,7 +11,7 @@ import os from "os";
 
 import { log } from "./log.js";
 import { fileExists, folderExists, resolveURL, getSubfolders, ewabPackage } from "./tools.js";
-import { defaults } from "./config.js";
+import config, { defaults } from "./config.js";
 
 import glob from "tiny-glob";
 import jsdom from "jsdom";
@@ -336,6 +336,47 @@ async function begin(){
 
 	//Remove duplicates
 	ewabConfig.icons.list = [ ...new Set([ ...ewabConfig.icons.list ]) ];
+
+
+
+	log("Collecting script metadata");
+	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
+
+		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
+
+		for(const script of html.window.document.querySelectorAll("script[src]")){
+			const scriptPath = path.relative(ewabConfig.workPath, resolveURL(ewabConfig.workPath, markupPath, script.src));
+			if(!fileExists(path.join(ewabConfig.workPath, scriptPath))){
+				log("warning", `Found a reference to a script '${scriptPath}' in '${path.relative(ewabConfig.workPath, markupPath)}', but was unable to find a script at that path. Please remove any broken references to scripts.`);
+				continue;
+			}
+
+			const fileConfig = config.generateForFile(scriptPath);
+
+			const fileException = {
+				glob: scriptPath,
+				files: {
+					module: undefined,
+				},
+			};
+
+			if(script.type === "module"){
+				if(fileConfig.files.module === undefined){
+					log(`Found that '${scriptPath}' is loaded as a module in '${path.relative(ewabConfig.workPath, markupPath)}'. Unless other proof is found, this will be properly minified as a module.`);
+					fileException.files.module = true;
+					ewabConfig.fileExceptions.push(fileException);
+				}
+			}else{
+				if(fileConfig.files.module !== false){
+					log(`Found that '${scriptPath}' is loaded as a non-module in '${path.relative(ewabConfig.workPath, markupPath)}'. It will not be minified at top-level, to preserve possible sideffects.`);
+					fileException.files.module = false;
+					ewabConfig.fileExceptions.push(fileException);
+				}
+			}
+
+		}
+
+	}
 
 }
 

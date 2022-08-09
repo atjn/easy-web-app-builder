@@ -57,6 +57,7 @@ This is an overview of the entire configuration file.
   },
   files: {
     minify: Boolean: true
+    module: Boolean
     addSourceMaps: Boolean: true
     directOptions: Object
   },
@@ -103,6 +104,7 @@ This is an overview of the entire configuration file.
       },
       files: {
         minify: Boolean: true
+        module: Boolean
         addSourceMaps: Boolean: true
         directOptions: Object
       },

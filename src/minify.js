@@ -278,11 +278,16 @@ async function processItem(item){
 						case "mjs":
 						case "cjs": {
 
-							log(`Minifying '${itemRelativePath}' with terser`);
+							const addSourceMap = item.fileConfig.files.addSourceMaps;
+							const isModule = Boolean(item.fileConfig.files.module ?? item.extension === "mjs");
+
+							log(`Minifying '${itemRelativePath}' with terser as a ${isModule ? "module" : "non-module"}${addSourceMap ? ", and adding a sourcemap" : ""}`);
 
 							const minifiedJS = await terser(
 								{[path.basename(item.path)]: (await fs.readFile(item.path, "utf8"))},
 								{
+									ecma: 2022,
+									module: isModule,
 									...item.fileConfig.files.directOptions.js,
 									sourceMap: item.fileConfig.files.addSourceMaps ? {url: fileMapRelativePath, includeSources: true, root: itemFolderPathRelativeToFileMap} : false,
 								},
