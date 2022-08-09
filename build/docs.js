@@ -130,7 +130,6 @@ function printObject(object, indentation, options = {}, firstRun = true){
 				string += printObject(value, indentation + 2, options, false);
 				break;
 			default:
-				if(value.type === "boolean") value.flags.default = value.flags?.default ?? false;
 				if(value.type) string += value.type.charAt(0).toUpperCase() + value.type.slice(1);
 				if(value.flags?.default !== undefined && value.type !== "array"){
 					string += `${value.type ? ": " : ""}${value.type === "string" ? `"` : ``}${value.flags.default}${value.type === "string" ? `"` : ``}`;

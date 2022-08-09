@@ -314,7 +314,7 @@ export default async function (args){
 
 		],
 		handler: async () => {
-			const configFile = `\n/**\n * @file\n * Configuration script for eay-webapp.\n */\n\nexport default ${JSON.stringify(allAnswers.config, null, 2)}\n`;
+			const configFile = `\n/**\n * @file\n * Configuration script for easy-web-app-builder.\n */\n\nexport default ${JSON.stringify(allAnswers.config, null, 2)}\n`;
 			await fs.writeFile(path.join(global.ewabConfig.rootPath, allAnswers.useDefaultConfigName ? `.${defaults.configName}.js` : `.${allAnswers.configName}.js`), configFile);
 		},
 	});

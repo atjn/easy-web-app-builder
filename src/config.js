@@ -77,7 +77,9 @@ async function generateMain(callConfig){
 		{
 			glob: `${mainConfig.alias}/icons/**/*`,
 			images: {
-				compress: false,
+				compress: false, //TEMPORARY
+				convert: false,
+				targetExtension: "png",
 			},
 		},
 		{

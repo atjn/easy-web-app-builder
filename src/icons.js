@@ -42,7 +42,6 @@ async function add(){
 			scrape: false,
 			favicon: true,
 			pathOverride: `${ewabConfig.alias}/icons`,
-			mstile: true,
 			log: false,
 		};
 
