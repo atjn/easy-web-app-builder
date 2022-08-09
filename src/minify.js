@@ -357,12 +357,19 @@ async function processItem(item){
 
 				await originalImage.decoded;
 
-				item.fileConfig.images.resize = processResizeSettings(item.fileConfig.images.resize, {width: (await originalImage.decoded).bitmap.width, height: (await originalImage.decoded).bitmap.height});
+				const originalSize = {
+					width: (await originalImage.decoded).bitmap.width, 
+					height: (await originalImage.decoded).bitmap.height
+				};
 
-				const targetExtensions = [ ...new Set([ ...item.fileConfig.images.targetExtensions, item.fileConfig.images.targetExtension ]) ];
+				item.fileConfig.images.resize = processResizeSettings(item.fileConfig.images.resize, originalSize);
+
+				const targetExtensions = item.fileConfig.images.convert ?
+					[ ...new Set([ ...item.fileConfig.images.targetExtensions, item.fileConfig.images.targetExtension ]) ] :
+					[ item.fileConfig.images.targetExtension ];
 
 
-				for(const size of item.fileConfig.images.resize.resizeTo){
+				for(const size of item.fileConfig.images.convert ? item.fileConfig.images.resize.resizeTo : [ originalSize ]){
 
 					try{
 
