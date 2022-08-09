@@ -183,7 +183,8 @@ async function processItem(item){
 
 				const fileMapPath = path.join(ewabConfig.workPath, ewabConfig.alias, "sourceMaps", `${originalHash}.${item.extension}.map`);
 				const fileMapRelativePath = path.relative(path.join(item.path, ".."), fileMapPath);
-				const itemFolderPathRelativeToFileMap = path.join(path.relative(path.join(fileMapPath, ".."), item.path), "..");
+				const itemPathRelativeToFileMap = path.join(path.relative(path.join(fileMapPath, ".."), item.path));
+				const itemFolderPathRelativeToFileMap = path.join(itemPathRelativeToFileMap, "..");
 
 				const cachedFilePath = path.join(ewabConfig.cachePath, "items", `${originalHash}.${item.extension}`);
 				const cachedFileMapPath = `${cachedFilePath}.map`;
@@ -230,11 +231,12 @@ async function processItem(item){
 						}
 						case "css": {
 
-							log(`Minifying '${itemRelativePath}' with clean-css`);
+							const addSourceMap = item.fileConfig.files.addSourceMaps;
+
+							log(`Minifying '${itemRelativePath}' with clean-css${addSourceMap ? ", and adding a sourcemap" : ""}`);
 
 							const minifiedCSS = await new CleanCSS(
 								{
-									returnPromise: true,
 									inline: false,
 									level: {
 										1: {
@@ -249,13 +251,26 @@ async function processItem(item){
 										},
 									},
 									...item.fileConfig.files.directOptions.css,
+									returnPromise: true,
+									sourceMap: addSourceMap,
+									sourceMapInlineSources: true,
 								},
 							).minify(await fs.readFile(item.path));
 
 							await fs.writeFile(
 								cachedFilePath,
-								minifiedCSS.styles,
+								`${minifiedCSS.styles}\n/*# sourceMappingURL=${fileMapRelativePath} */`,
 							);
+
+							const sourceMap = JSON.parse(minifiedCSS.sourceMap.toString());
+							sourceMap.sources = [ itemPathRelativeToFileMap ];
+
+							if(item.fileConfig.files.addSourceMaps){
+								await fs.writeFile(
+									cachedFileMapPath,
+									JSON.stringify(sourceMap),
+								);
+							}
 
 							break;
 						}
