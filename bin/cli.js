@@ -13,8 +13,9 @@ import ewab from "../src/ewab.js";
 import { defaults } from "../src/config.js";
 import { ewabPackage } from "../src/tools.js";
 
-import setup from "./setup.js";
 import scaffold from "./scaffold.js";
+import setup from "./setup.js";
+import watch from "./watch.js";
 
 
 const args = yargs(hideBin(process.argv))
@@ -54,11 +55,14 @@ const args = yargs(hideBin(process.argv))
 
 if(args._.length > 0){
 	switch(args._[0]){
+		case "scaffold":
+			scaffold({type: args.type});
+			break;
 		case "setup":
 			setup(args);
 			break;
-		case "scaffold":
-			scaffold({type: args.type});
+		case "watch":
+			watch(args);
 			break;
 	}
 }else{
