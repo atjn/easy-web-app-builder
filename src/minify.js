@@ -714,7 +714,7 @@ async function updateImageReferences(){
 
 		}
 
-		await fs.writeFile(markupPath, html.window.document.documentElement.outerHTML);
+		await fs.writeFile(markupPath, html.serialize());
 
 	}
 
