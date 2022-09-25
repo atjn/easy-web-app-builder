@@ -222,8 +222,6 @@ async function processItem(item){
 									...item.fileConfig.files.directOptions.html,
 								},
 							);
-
-							log(minifiedHTML);
 							
 							await fs.writeFile(
 								cachedFilePath,
