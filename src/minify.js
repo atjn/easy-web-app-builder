@@ -193,7 +193,6 @@ async function processItem(item){
 					log(`Copying minified version of '${itemRelativePath}' from cache`);
 				}else{
 
-
 					switch(item.extension){
 						case "html":
 						case "htm": {
