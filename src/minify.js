@@ -193,6 +193,7 @@ async function processItem(item){
 					log(`Copying minified version of '${itemRelativePath}' from cache`);
 				}else{
 
+
 					switch(item.extension){
 						case "html":
 						case "htm": {
@@ -221,6 +222,8 @@ async function processItem(item){
 									...item.fileConfig.files.directOptions.html,
 								},
 							);
+
+							log(minifiedHTML);
 							
 							await fs.writeFile(
 								cachedFilePath,
@@ -714,7 +717,7 @@ async function updateImageReferences(){
 
 		}
 
-		await fs.writeFile(markupPath, html.window.document.documentElement.outerHTML);
+		await fs.writeFile(markupPath, html.serialize());
 
 	}
 
