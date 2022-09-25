@@ -1,4 +1,12 @@
 
 import chokidar from "chokidar";
 
-console.log("Not implemented yet, sorry.");
+/**
+ *
+ * @param args
+ */
+export default async function (args){
+
+	console.log("Not implemented yet, sorry.");
+
+}
