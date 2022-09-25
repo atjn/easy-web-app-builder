@@ -1,3 +1,6 @@
+### 1.0.0-beta3
+- Hotfix for broken build in beta2.
+
 ### 1.0.0-beta2
 - Important fix to HTML parsing. It would strip the doctype from all documents, resulting in broken documents.
 
