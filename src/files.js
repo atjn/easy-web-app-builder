@@ -279,7 +279,7 @@ async function begin(){
 
 		const manifestLinkElement = html.window.document.createElement("link"); manifestLinkElement.rel = "manifest"; manifestLinkElement.href = relativeManifestLink;
 		html.window.document.head.appendChild(manifestLinkElement);
-		await fs.writeFile(markupPath, html.window.document.documentElement.outerHTML);
+		await fs.writeFile(markupPath, html.serialize());
 
 	}
 

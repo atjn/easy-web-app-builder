@@ -53,7 +53,7 @@ async function link(){
 			const bridge = html.window.document.createElement("script"); bridge.src = `${ewabConfig.alias}/serviceworker-bridge.js`; bridge.type = "module";
 			html.window.document.head.appendChild(bridge);
 		
-			await fs.writeFile(markupPath, html.window.document.documentElement.outerHTML);
+			await fs.writeFile(markupPath, html.serialize());
 
 		}
 

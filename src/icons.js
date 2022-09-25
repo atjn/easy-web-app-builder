@@ -180,7 +180,7 @@ async function add(){
 
 			iconsContainer.remove();
 		
-			await fs.writeFile(markupPath, html.window.document.documentElement.outerHTML);
+			await fs.writeFile(markupPath, html.serialize());
 
 		}
 
