@@ -1,29 +1,28 @@
-name: "CodeQL"
+name: CodeQL
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   schedule:
-    - cron: "3 12 * * 5"
+    - cron: "34 10 12 * *"
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
 
 jobs:
-  analyze:
-    name: Analyze
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
+
+  codeql:
 
     strategy:
       fail-fast: false
       matrix:
-        language: [ javascript ]
+        language: [javascript]
+
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Initialize CodeQL
