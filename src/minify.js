@@ -351,15 +351,14 @@ async function minify(type){
 		),
 	);
 
-	await asyncPool(
+	for await (const result of asyncPool(
 		concurrentThreads,
 		itemProcessingQueue,
-		async item => {
-			await processItem(item);
-			completedItemProcesses++;
-			bar(completedItemProcesses / itemProcessingQueue.length);
-		},
-	);
+		processItem,
+	)){
+		completedItemProcesses++;
+		bar(completedItemProcesses / itemProcessingQueue.length);
+	}
 
 	if(type === "images") vips.shutdown();
 
