@@ -1,4 +1,4 @@
-/* global ewabConfig ewabRuntime */
+/* global ewabConfig */
 
 /**
  * @file
@@ -10,7 +10,7 @@ import path from "path";
 import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
 import { log, bar } from "./log.js";
-import { fileExists, getExtension, resolveURL, deepClone, ewabPackage } from "./tools.js";
+import { fileExists, getExtension, resolveURL } from "./tools.js";
 import config, { supportedImageExtensions } from "./config.js";
 
 import jsdom from "jsdom";
@@ -19,15 +19,15 @@ import jsdom from "jsdom";
 
 import newVips from "wasm-vips";
 const vips = await newVips({
-	print: (stdout) => {console.log("custom", stdout)},
-	printErr: (stderr) => {console.log("custom", stderr)},
+	print: (stdout) => {console.log("custom", stdout);},
+	printErr: (stderr) => {console.log("custom", stderr);},
 	preRun: module => {
-		module.print = (stdout) => {console.log("custom", stdout)};
-		module.printErr = (stderr) => {console.log("custom", stderr)};
+		module.print = (stdout) => {console.log("custom", stdout);};
+		module.printErr = (stderr) => {console.log("custom", stderr);};
 	},
 	postRunt: module => {
-		module.print = (stdout) => {console.log("custom", stdout)};
-		module.printErr = (stderr) => {console.log("custom", stderr)};
+		module.print = (stdout) => {console.log("custom", stdout);};
+		module.printErr = (stderr) => {console.log("custom", stderr);};
 	},
 });
 
@@ -126,7 +126,7 @@ class ImageEncodings{
 					},
 					balanced: {
 						distance: 3,
-					}
+					},
 				},
 				flat: {
 					high: {
@@ -142,7 +142,7 @@ class ImageEncodings{
 					},
 					balanced: {
 						distance: 3,
-					}
+					},
 				},
 			},
 		}),
