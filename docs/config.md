@@ -62,32 +62,30 @@ This is an overview of the entire configuration file.
     directOptions: Object
   },
   images: {
-    compress: Boolean: true
-    quality: Number: 0.999
-    convert: Boolean: true
-    updateReferences: Boolean: true
     keepOriginal: Boolean: true
-    targetExtension: String: "webp" ("webp", "jxl", "avif", "jpg", "png")
-    targetExtensions: [
-      String ("webp", "jxl", "avif", "jpg", "png")
-    ],
-    resize: {
-      auto: Boolean: true
-      fallbackSize: Number
+    compress: {
+      enable: Boolean: true
+      subject: String: "auto" ("auto", "flat", "organic")
+      quality: String: "high" ("high", "balanced")
+    },
+    convert: {
+      enable: Boolean: true
+      updateReferences: Boolean: true
+      targetExtension: String: "webp" ("jxl", "webp", "jpg", "png")
+      targetExtensions: [
+        String ("jxl", "webp", "jpg", "png")
+      ],
       maxSize: Number: 2560
-      sizes: String
-      addSizesTagToImg: Boolean: true
-      customSizes: [
-        {
-          width: Number
-          height: Number
-        },
+      minSize: Number: 16
+      sizeSteps: Number: 0.5
+      size: Number
+      sizes: [
+        Number
       ],
     },
     encoderOptions: {
-      webp: Object
       jxl: Object
-      avif: Object
+      webp: Object
       jpg: Object
       png: Object
     },
@@ -109,32 +107,30 @@ This is an overview of the entire configuration file.
         directOptions: Object
       },
       images: {
-        compress: Boolean: true
-        quality: Number: 0.999
-        convert: Boolean: true
-        updateReferences: Boolean: true
         keepOriginal: Boolean: true
-        targetExtension: String: "webp" ("webp", "jxl", "avif", "jpg", "png")
-        targetExtensions: [
-          String ("webp", "jxl", "avif", "jpg", "png")
-        ],
-        resize: {
-          auto: Boolean: true
-          fallbackSize: Number
+        compress: {
+          enable: Boolean: true
+          subject: String: "auto" ("auto", "flat", "organic")
+          quality: String: "high" ("high", "balanced")
+        },
+        convert: {
+          enable: Boolean: true
+          updateReferences: Boolean: true
+          targetExtension: String: "webp" ("jxl", "webp", "jpg", "png")
+          targetExtensions: [
+            String ("jxl", "webp", "jpg", "png")
+          ],
           maxSize: Number: 2560
-          sizes: String
-          addSizesTagToImg: Boolean: true
-          customSizes: [
-            {
-              width: Number
-              height: Number
-            },
+          minSize: Number: 16
+          sizeSteps: Number: 0.5
+          size: Number
+          sizes: [
+            Number
           ],
         },
         encoderOptions: {
-          webp: Object
           jxl: Object
-          avif: Object
+          webp: Object
           jpg: Object
           png: Object
         },

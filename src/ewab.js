@@ -10,7 +10,7 @@ import { log, bar } from "./log.js";
 import config from "./config.js";
 import cache from "./cache.js";
 import files from "./files.js";
-import minify from "./minify.js";
+import minify, { ImagesMeta } from "./minify.js";
 import icons from "./icons.js";
 import serviceworker from "./serviceworker.js";
 
@@ -19,7 +19,8 @@ import serviceworker from "./serviceworker.js";
  */
 export const ewabRuntime = {
 	sourcePath: ewabSourcePath,
-	minifiedHashes: [],
+	minifiedItemHashes: [],
+	imagesMeta: new ImagesMeta(),
 };
 
 

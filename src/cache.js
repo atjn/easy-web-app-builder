@@ -114,20 +114,19 @@ async function generateHash(){
  */
 async function cleanUnusedFiles(){
 
-	const cacheRemovals = [];
-
 	for(const itemPath of getFolderFiles(path.join(ewabConfig.cachePath, "/items"))){
 
-		if(!ewabRuntime.minifiedHashes.reduce((used, hash) => Boolean(itemPath.includes(hash) ? true : used))){
-			log(`Removing minified item '${itemPath}' from cache, as it is no longer used`);
-			cacheRemovals.push(
-				fs.remove(path.join(ewabConfig.cachePath, "/items", itemPath)),
-			);
+		let remove = true;
+
+		findMatch: for(const hash of ewabRuntime.minifiedItemHashes){
+			if(itemPath.includes(hash)){
+				remove = false;
+				break findMatch;
+			}
 		}
 
+		if(remove) await fs.remove(path.join(ewabConfig.cachePath, "/items", itemPath));
+
 	}
-
-	await Promise.allSettled(cacheRemovals);
-
 
 }

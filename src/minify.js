@@ -12,14 +12,24 @@ import { hashElement as folderHash } from "folder-hash";
 import { log, bar } from "./log.js";
 import { fileExists, getExtension, resolveURL, deepClone, ewabPackage } from "./tools.js";
 import config, { supportedImageExtensions } from "./config.js";
-import lodash from "lodash";
 
 import jsdom from "jsdom";
 
 
 
-import { ImagePool } from "@squoosh/lib";
-import { ssim } from "ssim.js";
+import newVips from "wasm-vips";
+const vips = await newVips({
+	print: (stdout) => {console.log("custom", stdout)},
+	printErr: (stderr) => {console.log("custom", stderr)},
+	preRun: module => {
+		module.print = (stdout) => {console.log("custom", stdout)};
+		module.printErr = (stderr) => {console.log("custom", stderr)};
+	},
+	postRunt: module => {
+		module.print = (stdout) => {console.log("custom", stdout)};
+		module.printErr = (stderr) => {console.log("custom", stderr)};
+	},
+});
 
 import os from "os";
 
@@ -32,8 +42,224 @@ import CleanCSS from "clean-css";
 import { optimize as svgo } from "svgo";
 
 import asyncPool from "tiny-async-pool";
+import { ewabRuntime } from "./ewab.js";
 
 export default minify;
+
+
+
+class ImageEncoding{
+	constructor(entries = {}){
+		for(const key of Object.keys(entries)){
+			this[key] = entries[key];
+		}
+	}
+	mimeType;
+	extension;
+	alternateExtensions = [];
+	encodingEngine;
+	vipsSaveFunction;
+	relatedDocumentation = [];
+	encodingOptions;
+
+	get allExtensions(){
+		return [ ...new Set([ this.extension, ...this.alternateExtensions ]) ];
+	}
+
+	get vipsDocumentation(){
+		return `https://www.libvips.org/API/current/VipsForeignSave.html#vips-${this.vipsSaveFunction}`;
+	}
+
+	getEncodingOption = (subject, quality) => {
+		return {
+			...this.encodingOptions?.universal,
+			...this.encodingOptions?.[subject]?.[quality],
+		};
+	};
+
+}
+
+class ImageEncodings{
+	encodings = [
+		/*
+		new ImageEncoding({
+			mimeType: "image/avif",
+			extension: "avif",
+			encodingEngine: "TODO",
+			vipsSaveFunction: "avifsave",
+			encodingOptions: {
+				universal: {
+				},
+				auto: {
+					high: {
+					},
+					balanced: {
+					}
+				},
+				flat: {
+					high: {
+					},
+					balanced: {
+					},
+				},
+				organic: {
+					high: {
+					},
+					balanced: {
+					}
+				},
+			},
+		}),
+		*/
+		new ImageEncoding({
+			mimeType: "image/jxl",
+			extension: "jxl",
+			encodingEngine: "libjxl",
+			vipsSaveFunction: "jxlsave",
+			encodingOptions: {
+				universal: {
+					tier: 0,
+				},
+				auto: {
+					high: {
+						distance: 1,
+					},
+					balanced: {
+						distance: 3,
+					}
+				},
+				flat: {
+					high: {
+						distance: 1,
+					},
+					balanced: {
+						distance: 3,
+					},
+				},
+				organic: {
+					high: {
+						distance: 1,
+					},
+					balanced: {
+						distance: 3,
+					}
+				},
+			},
+		}),
+		new ImageEncoding({
+			mimeType: "image/webp",
+			extension: "webp",
+			encodingEngine: "libwebp",
+			vipsSaveFunction: "webpsave",
+			relatedDocumentation: [
+				"https://github.com/webmproject/libwebp/blob/main/man/cwebp.1", 
+				"https://github.com/webmproject/libwebp/blob/main/src/enc/config_enc.c",
+			],
+			encodingOptions: {
+				universal: {
+					strip: true,
+					effort: 5,
+				},
+				auto: {
+					high: {
+						Q: 90,
+					},
+					balanced: {
+						Q: 80,
+					},
+				},
+				flat: {
+					high: {
+						preset: vips.ForeignWebpPreset.text,
+						lossless: true,
+					},
+					balanced: {
+						preset: vips.ForeignWebpPreset.text,
+						lossless: true,
+						near_lossless: true,
+						Q: 50,
+					},
+				},
+				organic: {
+					high: {
+						preset: vips.ForeignWebpPreset.picture,
+						Q: 85,
+					},
+					balanced: {
+						preset: vips.ForeignWebpPreset.photo,
+						Q: 75,
+					},
+				},
+			},
+		}),
+		new ImageEncoding({
+			mimeType: "image/jpeg",
+			extension: "jpg",
+			alternateExtensions: [ "jpeg" ],
+			encodingEngine: "mozjpeg",
+			vipsSaveFunction: "jpegsave",
+			encodingOptions: {
+				universal: {
+					optimize_coding: true,
+					interlace: true,
+					strip: true,
+					trellis_quant: true,
+					overshoot_deringing: true,
+					optimize_scans: true,
+					quant_table: 3, // ImageMagick table, mozjpeg default
+				},
+				auto: {
+					high: {
+						Q: 90,
+					},
+					balanced: {
+						Q: 80,
+					},
+				},
+				flat: {
+					high: {
+						Q: 90,
+					},
+					balanced: {
+						Q: 80,
+					},
+				},
+				organic: {
+					high: {
+						Q: 85,
+					},
+					balanced: {
+						Q: 70,
+					},
+				},
+			},
+		}),
+		new ImageEncoding({
+			mimeType: "image/png",
+			extension: "png",
+			encodingEngine: "spng",
+			vipsSaveFunction: "pngsave",
+			encodingOptions: {
+				universal: {
+					compression: 8,
+				},
+			},
+		}),
+	];
+
+	match(keyword){
+		for(const encoding of this.encodings){
+			if(keyword === encoding.mimeType) return encoding;
+			for(const extension of encoding.allExtensions) if(keyword === extension) return encoding;
+			if(keyword === encoding.encodingEngine) return encoding;
+		}
+	}
+
+}
+
+const imageEncodings = new ImageEncodings();
+
+
 
 /**
  * Minifies an aspect of the webapp. This can range from compressing images to deleting development-only files.
@@ -85,8 +311,6 @@ async function minify(type){
 
 	bar.begin(`${processName.action.present} ${processName.item.plural}`);
 
-	global.imagePool = type === "images" ? new ImagePool() : undefined;
-
 	const itemProcessingQueue = [];
 	let completedItemProcesses = 0;
 
@@ -108,7 +332,7 @@ async function minify(type){
 		if(
 			(type === "remove" && fileConfig.files.remove !== true) ||
 			(type === "files" && fileConfig.files.minify !== true) ||
-			(type === "images" && fileConfig.images.compress !== true)
+			(type === "images" && fileConfig.images.compress.enable !== true && fileConfig.images.convert.enable !== true)
 		){
 			continue;
 		}
@@ -137,7 +361,7 @@ async function minify(type){
 		},
 	);
 
-	if(type === "images") global.imagePool.close();
+	if(type === "images") vips.shutdown();
 
 	if(itemProcessingQueue.length === 0){
 		bar.hide();
@@ -165,8 +389,6 @@ async function processItem(item){
 	try{
 
 		const originalHash = (await folderHash(item.path, { "encoding": "hex" })).hash;
-
-		ewabRuntime.minifiedHashes.push(originalHash);
 
 		switch(item.type){
 
@@ -353,192 +575,103 @@ async function processItem(item){
 				log(`Compressing '${itemRelativePath}'..`);
 				const reports = [];
 
-				const originalImage = global.imagePool.ingestImage(item.path);
-
-				await originalImage.decoded;
+				const originalImage = vips.Image.newFromFile(item.path);
 
 				const originalSize = {
-					width: (await originalImage.decoded).bitmap.width, 
-					height: (await originalImage.decoded).bitmap.height
+					width: originalImage.width,
+					height: originalImage.height,
 				};
 
-				item.fileConfig.images.resize = processResizeSettings(item.fileConfig.images.resize, originalSize);
+				if(item.fileConfig.images.convert.enable) item.fileConfig.images.convert = processConvertSettings(item.fileConfig.images.convert, originalSize);
 
-				const targetExtensions = item.fileConfig.images.convert ?
-					[ ...new Set([ ...item.fileConfig.images.targetExtensions, item.fileConfig.images.targetExtension ]) ] :
-					[ item.fileConfig.images.targetExtension ];
+				const targetExtensions = [ ...new Set([ ...item.fileConfig.images.convert.targetExtensions, item.fileConfig.images.convert.targetExtension ]) ];
 
+				const newImageMeta = ewabRuntime.imagesMeta.new({
+					path: item.path,
+					hash: originalHash,
+					width: originalSize.width,
+					height: originalSize.height,
+					fileConfig: item.foleConfig,
+				});
 
-				for(const size of item.fileConfig.images.convert ? item.fileConfig.images.resize.resizeTo : [ originalSize ]){
+				for(const sizeConstraint of item.fileConfig.images.convert.enable ? item.fileConfig.images.convert.sizes : [ originalSize.width ]){
 
 					try{
 
-						const cachedImagePath = path.join(ewabConfig.cachePath, "items", `${originalHash}-${size.width}w`);
-						const newImagePath = (item.fileConfig.images.preserveOriginalFile && size.width === (await originalImage.decoded).bitmap.width) ?
-							item.path :
-							item.path.replace(/\.\w+$/u, `-${size.width}w$&`).replace(/\.\w+$/u, ".");
+						const fittedImageSize = fitImageSizeToConstraints(originalSize, sizeConstraint);
+
+						const cachedImagePath = path.join(ewabConfig.cachePath, "items", `${originalHash}-${fittedImageSize.width}w`);
 
 						let integrity = true;
-						for(const targetExtension of targetExtensions){
-							if(!fileExists(`${cachedImagePath}.${targetExtension}`)) integrity = false;
+						testIntegrity: for(const targetExtension of targetExtensions){
+							if(!fileExists(`${cachedImagePath}.${targetExtension}`)){
+								integrity = false;
+								break testIntegrity;
+							}
 						}
 						if(integrity){
-							reports.push(`${size.width}x${size.height}, (${targetExtensions.join(", ")}), copied from cache`);
+							reports.push(`${sizeConstraint}, (${targetExtensions.join(", ")}), copied from cache`);
 						}else{
 
-							const image = deepClone(originalImage);
-							
-							await image.preprocess(
-								{
-									resize: {
-										enabled: true,
-										width: size.width,
-										height: size.height,
-									},
-								},
-							);
+							const image = originalImage.resize(fittedImageSize.width / originalImage.width);
 
 							for(const targetExtension of targetExtensions){
 
-								const options = {};
-								const engine = {};
+								const targetEncoding = imageEncodings.match(targetExtension);
 
-								switch(targetExtension){
-									case "png":
-										engine.name = "oxipng";
-										engine.mainQualityOption = {
-											onlyLossless: true,
-										};
-										break;
-									case "avif":
-										engine.losslessOptions = {
-											cqLevel: 0,
-											subsample: 3,
-										};
-										engine.mainQualityOption = {
-											key: "cqLevel",
-											min: 62,
-											max: 0,
-											probes: [50, 30],
-										};
-										break;
-									case "webp":
-										engine.losslessOptions = {
-											lossless: 1,
-										};
-										break;
-									case "jpg":
-										engine.name = "mozjpeg";
-										engine.options = {
-											progressive: true,
-										};
-										engine.losslessOptions = {
-											quality: 100,
-										};
-										break;
-									case "jxl":
-										engine.options = {
-											progressive: true,
-										};
-										engine.losslessOptions = {
-											quality: 100,
-										};
-										break;
-									default:
-										throw new Error(`Does not support compressing to image with extension "${targetExtension}"`);
-								}
+								if(!targetEncoding) throw new Error(`Does not support compressing to image with extension "${targetExtension}"`);
 
-								engine.name = engine.name ?? targetExtension;
-								engine.mainQualityOption = engine.mainQualityOption ?? {
-									key: "quality",
-									min: 40,
-									max: 100,
-									probes: [40, 60],
-								};
+								// Save the image to cache
+								image[targetEncoding.vipsSaveFunction](`${cachedImagePath}.${targetEncoding.extension}`, {
+									...targetEncoding.getEncodingOption(item.fileConfig.images.compress.subject, item.fileConfig.images.compress.quality),
+									...item.fileConfig.images.encoderOptions[targetEncoding.encodingEngine],
+								});
 
-								options[engine.name] = {
-									...engine.options,
-									...item.fileConfig.images.encoderOptions[targetExtension],
-								};
+								const loggedQuality = "";
 
-								let loggedQuality = "";
-
-								if(engine.mainQualityOption.onlyLossless === true){
+								/*if(engine.mainQualityOption.onlyLossless === true){
 
 									loggedQuality = `only supports highest`;
 
-								}else if(item.fileConfig.images.encoderOptions[targetExtension][engine.mainQualityOption.key]){
+								}else if(item.fileConfig.images.encoderOptions[engine.name][engine.mainQualityOption.key]){
 
-									loggedQuality = `${item.fileConfig.images.encoderOptions[targetExtension][engine.mainQualityOption.key]} (directly set in config)`;
+									loggedQuality = `${item.fileConfig.images.encoderOptions[engine.name][engine.mainQualityOption.key]} (directly set in config)`;
 
 								}else if(item.fileConfig.images.quality === 1){
 
 									loggedQuality = `highest (as set in config)`;
-									options[engine.name] = { ...options[engine.name], ...engine.losslessOptions };
+									options[engine.name] = { ...options[engine.name], ...engine.quality.lossless };
 
 								}else{
 
-									const results = [];
-
-									for(const quality of engine.mainQualityOption.probes){
-										options[engine.name][engine.mainQualityOption.key] = quality;
-										await image.encode(options);
-
-										const compressedImage = global.imagePool.ingestImage((await image.encodedWith[engine.name]).binary);
-
-										results.push(ssim((await image.decoded).bitmap, (await compressedImage.decoded).bitmap).mssim);
-									}
-
-									/**
-									 * If an image is hard/impossible to compress, the SSIM values can be very close to a straight line.
-									 * Minor noise can cause the probes to describe a line where less quality results in a better looking image, which is obviously not true.
-									 * This check catches that situation, and encodes the image losslessly instead.
-									 */
-									if(results[0] >= results[1]){
-
-										options[engine.name][engine.mainQualityOption.key] = engine.mainQualityOption.max;
-
-									}else{
-
-										/**
-										 * The next three lines plot a linear graph from the results of the two probes,
-										 * then determines what quality setting correlates with the desired SSIM quality, according to the graph.
-										 */
-										const slope = (results[1] - results[0]) / (engine.mainQualityOption.probes[1] - engine.mainQualityOption.probes[0]);
-										const offset = results[0] - (slope * engine.mainQualityOption.probes[0]);
-										options[engine.name][engine.mainQualityOption.key] = Math.round( lodash.clamp((( item.fileConfig.images.quality - offset ) / slope), engine.mainQualityOption.min, engine.mainQualityOption.max) );
-
-									}
-
-									loggedQuality = `${options[engine.name][engine.mainQualityOption.key]} (mathing overall quality set in config: ${item.fileConfig.images.quality})`;
-
-									if(options[engine.name][engine.mainQualityOption.key] === engine.mainQualityOption.max){
-										options[engine.name] = { ...options[engine.name], ...engine.losslessOptions };
-									}
+									//TODO
 
 
-								}
+								}*/
 
-								await image.encode(options);
-								if(!(await image.encodedWith[engine.name])?.extension || !(await image.encodedWith[engine.name])?.binary) throw new Error(`Unexpected error while compressing image`);
-								await fs.writeFile(`${cachedImagePath}.${(await image.encodedWith[engine.name]).extension}`, (await image.encodedWith[engine.name]).binary);
-
-
-								reports.push(`${size.width}x${size.height}, ${targetExtension}, quality: ${loggedQuality}`);
+								reports.push(`${sizeConstraint}, ${targetExtension}, quality: ${loggedQuality}`);
 
 							}
 						
 						}
 						
 						await Promise.all(targetExtensions.map(targetExtension => {
-							return fs.copy(`${cachedImagePath}.${targetExtension}`, `${newImagePath}.${targetExtension}`);
+							const newImagePath = transformImagePath(item.path, fittedImageSize.width, {extension: targetExtension});
+							newImageMeta.newVersion({
+								path: newImagePath,
+								type: targetExtension,
+								width: fittedImageSize.width,
+								height: fittedImageSize.height,
+								constraint: sizeConstraint,
+							});
+							return fs.copy(`${cachedImagePath}.${targetExtension}`, newImagePath);
 						}));
 					
 					}catch(error){
 
 						log("warning", `Unable to compress '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
 
-						log(`Squoosh error: ${error}`);
+						log(`Error: ${error}`);
 					}
 					
 				}
@@ -554,6 +687,8 @@ async function processItem(item){
 
 		}
 
+		ewabRuntime.minifiedItemHashes.push(originalHash);
+
 	}catch(error){
 
 		if(String(error).includes("has an unsupported format")){
@@ -561,14 +696,14 @@ async function processItem(item){
 		}else{
 			log("warning", `Unable to compress '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
 		}
-		log(`Squoosh error: ${error}`);
+		log(`Error: ${error}`);
 
 	}
 
 }
 
 /**
- * Updates references to images in other documents, such as HTTP and CSS.
+ * Updates references to images in other documents, such as HTML and CSS.
  * This is not perfect, it won't catch every link.
  */
 async function updateImageReferences(){
@@ -577,7 +712,14 @@ async function updateImageReferences(){
 
 		let css = await fs.readFile(sheetPath, "utf8");
 
-		for(const imageSet of css.matchAll(/[:,\s]-?\w*-?image-set\(\s*(?<urlElement>url\(\s*["'](?<url>["']+)["']\s*\))\s*\)/gui)){
+		// Find any background properties using simple url(), and convert them to image-set() if it is necessary 
+		let match = true;
+		while(match){
+			const imageSet = css.match(/(?<match>(?<pre>\bbackground(?:-image)?\s*?:\s*?[,\s])url\(\s*?["']?(?<url>[^\s]*?)["']?\s*?\)(?<pro>\s*?[;}]))/uisg);
+			if(imageSet === null){
+				match = false;
+				break;
+			}
 
 			const imagePath = resolveURL(
 				ewabConfig.workPath,
@@ -585,32 +727,98 @@ async function updateImageReferences(){
 				imageSet.groups.url,
 			);
 
-			if(fileExists(imagePath)){
+			const imageMeta = ewabRuntime.imagesMeta.findByPath(imagePath);
+			const fileConfig = imageMeta?.fileConfig;
 
-				const fileConfig = config.generateForFile(imagePath);
-
-				if(fileConfig.images.compress && fileConfig.images.convert){
-
-					log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: Updating reference to ${path.relative(ewabConfig.rootPath, imagePath)} with compressed/converted images`);
-
-					const images = [];
-
-					for(const targetExtension of fileConfig.images.targetExtensions){
-
-						const newURL = imageSet.groups.url.replace(/\.\w+$/u, `.${targetExtension}`);
-
-						const mime = targetExtension === "jpg" ? "jpeg" : targetExtension;
-						
-						images.push(`url("${newURL}") type("image/${mime}")`);
-
-					}
-
-					css = css.replace(imageSet.groups.urlElement, ` /* Generated by ${ewabPackage.name} */ ${images.join(", ")}`);
-
-				}
-
+			if(!imageMeta){
+				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: URL ${imageSet.groups.url} at index ${imageSet.index} does not correlate with a minified image, aborting upgrade to an image-set.`);
+			}if(!fileConfig.images.convert.enable){
+				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: URL ${imageSet.groups.url} at index ${imageSet.index} does not have a modifed URL, so no reason to upgrade to image-set.`);
 			}else{
-				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: Unable to parse URL at index: ${imageSet.index}, aboprting uprgade of the image-set.`);
+
+				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: upgrading url to image-set for URL ${imageSet.groups.url} at index ${imageSet.index}.`);
+
+				css = css.replace(imageSet.groups.match, `${imageSet.groups.pre}image-set("${imageSet.groups.url}")${imageSet.groups.pro}`);
+			}
+		}
+
+		// Find any image-set and expand it with extra images + fallback versions
+		match = true;
+		while(match){
+			const imageSet = css.match(/(?<match>(?<pre>\bbackground-image\s*?:[^;]*?\s*?[,\s])(?:image-set)\(\s*?["']?(?<url>[^\s'"]*?)["']?\s*?\)(?<pro>[^{]*?[;}]))/uisg);
+			if(imageSet === null){
+				match = false;
+				break;
+			}
+
+			const imagePath = resolveURL(
+				ewabConfig.workPath,
+				sheetPath,
+				imageSet.groups.url,
+			);
+
+			const imageMeta = ewabRuntime.imagesMeta.findByPath(imagePath);
+			const fileConfig = imageMeta?.fileConfig;
+
+			if(!imageMeta){
+				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: URL ${imageSet.groups.url} at index ${imageSet.index} does not correlate with a minified image, aborting upgrade of the image-set.`);
+			}if(!fileConfig.images.convert.enable){
+				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: URL ${imageSet.groups.url} at index ${imageSet.index} does not have a modifed URL, so no reason to upgrade image-set.`);
+			}else{
+
+				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: upgrading image-set for URL ${imageSet.groups.url} at index ${imageSet.index}.`);
+
+				const fallBackImage = imageMeta.matchVersion({
+					constraint: fileConfig.images.convert.size,
+					encoding: fileConfig.images.convert.targetExtension,
+				});
+				const fallBackImageUrl = transformImagePath(imageSet.groups.url, fallBackImage.width, fallBackImage.encoding);
+
+				const lines = [];
+
+				const ewabMark = `/*${ewabConfig.alias}*/`;
+
+				// Support details: https://caniuse.com/css-image-set
+
+				// Chromium support
+				lines.push(`${imageSet.groups.pre}-webkit-image-set(url("${fallBackImageUrl}") ${ewabMark} )${imageSet.groups.pro}`);
+
+				// WebKit support
+				lines.push(`${imageSet.groups.pre}image-set("${fallBackImageUrl}") ${ewabMark} )${imageSet.groups.pro}`);
+
+				// Gecko support, best so far
+				const imageTypeLines = [];
+				for(const extension of imageMeta.fileConfig.images.convert.targetExtensions){
+					const encoding = imageEncodings.match(extension);
+					const image = imageMeta.matchVersion({
+						constraint: fallBackImage.constraint,
+						encoding,
+					});
+					const newUrl = transformImagePath(imageSet.groups.url, image.width, image.encoding);
+					imageTypeLines.push(`"${newUrl}" type("${encoding.mimeType}")`);
+				}
+				lines.push(`${imageSet.groups.pre}image-set(${ imageTypeLines.join(`,\n`) }) ${ewabMark} )${imageSet.groups.pro}`);
+				
+				// Ideal setup, not supported anywhere yet
+				const imageWidthTypeLines = [];
+				for(const extension of imageMeta.fileConfig.images.convert.targetExtensions){
+					const encoding = imageEncodings.match(extension);
+					for(const size of imageMeta.fileConfig.images.convert.sizes){
+						const image = imageMeta.matchVersion({
+							constraint: size,
+							encoding,
+						});
+						const newUrl = transformImagePath(imageSet.groups.url, image.width, image.encoding);
+						imageWidthTypeLines.push(`"${newUrl}" type("${encoding.mimeType}") ${image.width}w`);
+					}
+				}
+				lines.push(`${imageSet.groups.pre}image-set(${ imageTypeLines.join(`,\n`) }) ${ewabMark} )${imageSet.groups.pro}`);
+
+		
+
+				css = css.replace(imageSet.groups.match, lines.join(`\n`));
+
+
 			}
 			
 
@@ -620,7 +828,7 @@ async function updateImageReferences(){
 
 
 	}
-
+	
 	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
 
 		const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
@@ -643,25 +851,26 @@ async function updateImageReferences(){
 				let imagePath;
 				let srcType;
 
-				if(fileExists(srcsetPath)){
+				if(ewabRuntime.minifiedItemsMeta.has(srcsetPath)){
 					imagePath = srcsetPath;
 					srcType = "srcset";
-				}else if(fileExists(srcPath)){
+				}else if(ewabRuntime.minifiedItemsMeta.has(srcPath)){
 					imagePath = srcPath;
 					srcType = "src";
 				}else{
 					continue;
 				}
-				const fileConfig = config.generateForFile(imagePath);
+				const itemMeta = ewabRuntime.minifiedItemsMeta.get(imagePath);
+				const fileConfig = itemMeta.fileConfig;
 				const url = img[srcType];
 
 				if(fileConfig.images.updateReferences){
 
-					for(const targetExtension of fileConfig.images.targetExtensions){
+					for(const targetExtension of fileConfig.images.convert.targetExtensions){
 						const newURL = url.replace(/\.\w+$/u, `.${targetExtension}`);
 						const mimeType = `image/${targetExtension === "jpg" ? "jpeg" : targetExtension}`;
 
-						if(targetExtension === fileConfig.images.targetExtensions[fileConfig.images.targetExtensions.length - 1]){
+						if(targetExtension === fileConfig.images.convert.targetExtensions[fileConfig.images.convert.targetExtensions.length - 1]){
 							img[srcType] = newURL;
 						}else{
 							const source = html.window.document.createElement("source");
@@ -687,18 +896,19 @@ async function updateImageReferences(){
 						img.srcset,
 					);
 
-					if(fileExists(imagePath)){
+					if(ewabRuntime.minifiedItemsMeta.has(imagePath)){
 
-						const fileConfig = config.generateForFile(imagePath);
+						const itemMeta = ewabRuntime.minifiedItemsMeta.get(imagePath);
+						const fileConfig = itemMeta.fileConfig;
 
-						if(fileConfig.images.compress && fileConfig.images.convert){
-							//fileConfig.images.resize = processResizeSettings(fileConfig.images.resize, imagePath);
+						if(fileConfig.images.compress.enable && fileConfig.images.convert){
+							//fileConfig.images.convert = processConvertSettings(fileConfig.images.convert, imagePath);
 
-							if(fileConfig.images.resize.addSizesTagToImg && fileConfig.images.resize.sizes) img.sizes = img.sizes ?? fileConfig.images.resize.sizes;
+							if(fileConfig.images.convert.addSizesTagToImg && fileConfig.images.convert.sizes) img.sizes = img.sizes ?? fileConfig.images.convert.sizes;
 
 							const srcset = [];
 
-							for(const size of fileConfig.images.resize.resizeTo){
+							for(const size of fileConfig.images.convert.resizeTo){
 								srcset.push(`${img.srcset.replace(/\.\w+$/u, `-${size.width}w$&`)} ${size.width}w`);
 							}
 
@@ -721,107 +931,103 @@ async function updateImageReferences(){
 }
 
 /**
- * Processes the EWAB resize config for an image.
- * Adds a list of sizes the image should be resized to.
+ * Processes the EWAB convert config for an image.
+ * Augments the list of sizes the image should be resized to.
  * 
- * @param {object}	resizeConfig	- The image resizeConfig from its fileConfig.
+ * @param {object}	convertConfig	- The image convertConfig from its fileConfig.
  * @param {object}	originalSize	- The original size of the image.
  * 
- * @returns {object} - The processed resizeConfig.
+ * @returns {object} - The processed convertConfig.
  */
-function processResizeSettings(resizeConfig, originalSize){
+function processConvertSettings(convertConfig, originalSize){
 
-	resizeConfig.resizeTo = [];
-
-	if(!resizeConfig.fallbackSize){
-		resizeConfig.fallbackSize = Math.max( Math.min(originalSize.width, resizeConfig.maxSize, 1920), Math.min(originalSize.height, resizeConfig.maxSize, 1920) );
-		//log(`No fallback size set in config, so decided that ${resizeConfig.fallbackSize} pixels was reasonable.`);
+	if(!convertConfig.size){
+		convertConfig.size = Math.max(
+			Math.min(originalSize.width, 1920),
+			Math.min(originalSize.height, 1920), 
+		);
+		//log(`No fallback size set in config, so decided that ${convertConfig.fallbackSize} pixels was reasonable.`);
 	}
+	convertConfig.size = Math.min(convertConfig.size, convertConfig.maxSize);
 
-	if(resizeConfig.auto){
-		const autoSizes = (resizeConfig.sizes ?
-			resizeConfig.sizes.match(/(?<width>\d+)(?<unit>(?:vw|px))\s*(?:,|$)/gui).map(match => match.groups) :
-			[ { width: "100", unit: "vw" } ]
-		).map(size => {
+	if(ewabConfig.images.keepOriginal) convertConfig.sizes.push(Math.max(originalSize.width, originalSize.height));
 
-			switch(size.unit.toLowerCase()){
-				case "px":
+	convertConfig.sizes.push(convertConfig.size);
 
-					return fitImageSizeToConstraints(originalSize, {
-						height: resizeConfig.maxSize,
-						width: size.width,
-					});
+	// Remove duplicates
+	convertConfig.sizes = [ ...new Set(convertConfig.sizes) ];
 
-				case "vw":
+	let extraSizes = [
+		convertConfig.maxSize,
+		3840, // Full screen UHD Landscape
+		2160, // Full screen UHD Portrait
+		2560, // Full screen QHD Landscape
+		1440, // Full screen QHD Portrait
+		1920, // Full screen SHD Landscape
+		1080, // Full screen SHD Portrait
+		512,  // Medium size image
+		265,  // Small image
+		196,  // Large icon
+		128,  // Medium icon
+		64,   // Medium icon
+		32,   // Small icon
+		16,   // Small icon
+		convertConfig.minSize,
+	];
 
-					return [
-						3840, //UHD - Landscape
-						2160, //UHD - Portrait
-						2560, //QHD - Landscape
-						1440, //QHD - Portrait
-						1920, //SHD - Landscape
-						1080, //SHD - Portrait
-					]
-					.map(screenWidth => {
-						return fitImageSizeToConstraints(originalSize, {
-							height: resizeConfig.maxSize,
-							width: Math.min(resizeConfig.maxSize, size.width * screenWidth / 100),
-						});
-					});
-
-			}
-
-		});
-
-		resizeConfig.resizeTo.push( ...autoSizes.flat(2) );
-	}
-
-	resizeConfig.customSizes.push({height: resizeConfig.fallbackSize, width: resizeConfig.fallbackSize});
-	resizeConfig.customSizes = resizeConfig.customSizes.map(size => {
-		return fitImageSizeToConstraints(originalSize, size);
-	});
-
-	resizeConfig.resizeTo = resizeConfig.resizeTo.filter(size => {
-		for(const customSize of resizeConfig.customSizes){
-			if(customSize.width * 1.40 > size.width && size.width > customSize.width * 0.60) return false;
-		}
+	// Make sure no extra image is larger or smaller than alllowed
+	extraSizes = extraSizes.filter(size => {
+		if(size > convertConfig.maxSize) return false;
+		if(size < convertConfig.minSize) return false;
 		return true;
 	});
 
-	resizeConfig.resizeTo.sort((a, b) => {return b.width - a.width;});
-	let largerIndex = 0;
-	while(largerIndex < resizeConfig.resizeTo.length){
-		const largerSize = resizeConfig.resizeTo[largerIndex];
-		resizeConfig.resizeTo = resizeConfig.resizeTo.filter((size, index) => {
-			if(largerSize.width === size.width && largerIndex !== index) return false;
-			if(largerSize.width > size.width && size.width > largerSize.width * 0.60) return false;
-			return true;
-		});
-		largerIndex++;
+	// Make sure they are sorted from largest to smallest to make sure largest images
+	// exclude smaller images, and not vice-versa
+	extraSizes.sort((a, b) => {return b - a;});
+
+	// Add extra sizes unless they are pretty close to an existing size
+	for(const extraSize of extraSizes){
+		let include = true;
+		findSimilar: for(const size of convertConfig.sizes){
+			if(size * (1 + convertConfig.steps) >= extraSize && extraSize >= size * convertConfig.steps){
+				include = false;
+				break findSimilar;
+			}
+		}
+		if(include) convertConfig.sizes.push(extraSize);
 	}
 
-	if(ewabConfig.images.preserveOriginalFile) resizeConfig.customSizes.push(originalSize);
-	
-	resizeConfig.resizeTo = [ ...new Set([ ...resizeConfig.resizeTo, ...resizeConfig.customSizes ]) ].sort((a, b) => {return a.width - b.width;});
+	convertConfig.sizes.sort((a, b) => {return b - a;});
 
-	return resizeConfig;
-	
-
+	return convertConfig;
 }
 
 /**
- * Takes a specific image size, and makes it fit inside a given set of constraints, while preserving aspect ratio.
+ *
+ * @param path
+ * @param width
+ * @param encoding
+ */
+function transformImagePath(path, width, encoding){
+	return path.replace(/(?:-\d+?w)?(?:\.\w+)?\s*?$/ui, `${ typeof width === "number" ?  `-${width}w` : "" }.${encoding.extension}`);
+}
+
+/**
+ * Takes a specific image size, and makes sure it is neither wider, nor taller than the given constraint size, while preserving aspect ratio.
  * 
  * @param {object}	imageSize			- The current image size.
- * @param {object}	imageConstraints	- The constraints.
+ * @param {number}	imageSize.height	- The current image height.
+ * @param {number}	imageSize.width		- The current image width.
+ * @param {number}	imageConstraint		- The constraint (both height and width).
  * 
  * @returns {object} - The new image size, fitted to the constraints.
  */
-function fitImageSizeToConstraints(imageSize, imageConstraints){
+function fitImageSizeToConstraints(imageSize, imageConstraint){
 
 	const resizeRatio = Math.min(
-		imageConstraints.height / imageSize.height,
-		imageConstraints.width / imageSize.width,
+		imageConstraint / imageSize.height,
+		imageConstraint / imageSize.width,
 		1,
 	);
 
@@ -831,3 +1037,79 @@ function fitImageSizeToConstraints(imageSize, imageConstraints){
 	};
 
 }
+
+
+export class ImagesMeta{
+	images = [];
+
+	new(keys){
+		const newImage = new ImageMeta(keys);
+		this.images.push(newImage);
+		return newImage;
+	}
+
+	findByPath(path){
+		for(const image of this.images){
+			if(image.path === path){
+				return image;
+			}
+		}
+	}
+
+	findByHash(hash){
+		for(const image of this.images){
+			if(image.hash === hash){
+				return image;
+			}
+		}
+	}
+
+}
+
+class ImageVersion{
+	constructor(entries = {}){
+		for(const key of Object.keys(entries)){
+			this[key] = entries[key];
+		}
+	}
+	path;
+	encoding;
+	width;
+	height;
+	constraint;
+}
+
+class ImageMeta extends ImageVersion{
+	constructor(keys){
+		super(keys);
+	}
+	hash;
+	fileConfig;
+	versions = [];
+
+	newVersion(keys){
+		const newVersion = new ImageVersion(keys);
+		this.versions.push(newVersion);
+		return newVersion;
+	}
+
+	matchVersion(entries = {}){
+		return [ ...this.matchAllVersions(entries) ][0];
+	}
+
+	*matchAllVersions(entries = {}){
+		for(const version of this.versions){
+			let matches = true;
+			for(const key of Object.keys(entries)){
+				if(key === "encoding"){
+					if(version.encoding.mimeType !== entries.encoding.mimeType) matches = false;
+				}else{
+					if(version[key] !== entries[key]) matches = false;
+				}
+			}
+			if(matches) yield version;
+		}
+	}
+
+}
+

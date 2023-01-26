@@ -21,7 +21,7 @@ export const defaults = {
 	configName: "ewabconfig",
 	interface: "modern",
 	imageExtension: "webp",
-	imageExtensions: ["webp", "jxl"],
+	imageExtensions: ["jxl", "webp"],
 };
 
 export const logInterfaces = {
@@ -29,10 +29,10 @@ export const logInterfaces = {
 	minimal: "Will only show what it is currently doing. The only logs persisted after a completed runs are any warnings encountered.",
 	basic: "Outputs a simple line-by-line log.",
 	none: "No output at all",
-	debug: "Outputs a wealth of information that can help figure out why EWAB is that *that thing*",
+	debug: "Outputs a wealth of information that can help figure out why EWAB is doing *that thing*",
 };
 
-export const supportedImageExtensions = ["webp", "jxl", "avif", "jpg", "png"];
+export const supportedImageExtensions = ["jxl", "webp", "jpg", "png"]; //TODO: add support for avif with wasm-vips 0.0.5
 
 
 /**
@@ -279,36 +279,40 @@ const options = {
 
 		images: joi.object({
 
-			compress:			joi.boolean().default(true),
-			quality:			joi.number().min(0).max(1).default(0.999),
-			convert:			joi.boolean().default(true),
-			updateReferences:	joi.boolean().default(true),
-			keepOriginal:		joi.boolean().default(true),
+			keepOriginal: joi.boolean().default(true),
 
-			targetExtension: joi.string().valid(...supportedImageExtensions).default(defaults.imageExtension),
+			compress: joi.object({
 
-			targetExtensions: joi.array().items(
-				joi.string().valid(...supportedImageExtensions),
-			).default(defaults.imageExtensions),
+				enable: joi.boolean().default(true),
 
-			resize: joi.object({
+				subject: joi.string().valid("auto", "flat", "organic").default("auto"),
 
-				auto: joi.boolean().default(true),
+				quality: joi.string().valid("high", "balanced").default("high"),
 
-				fallbackSize: joi.number().integer().positive(),
+			}),
+
+			convert: joi.object({
+
+				enable: joi.boolean().default(true),
+
+				updateReferences: joi.boolean().default(true),
+
+				targetExtension: joi.string().valid(
+					...supportedImageExtensions,
+				).default(defaults.imageExtension),
+
+				targetExtensions: joi.array().items(
+					joi.string().valid(...supportedImageExtensions),
+				).default(defaults.imageExtensions),
 
 				maxSize: joi.number().integer().positive().default(2560),
+				minSize: joi.number().integer().positive().default(16),
 
-				sizes: joi.string(),
+				sizeSteps: joi.number().positive().default(0.50),
 
-				addSizesTagToImg: joi.boolean().default(true),
+				size: joi.number().integer().positive(),
 
-				customSizes: joi.array().items(
-					joi.object({
-						width: joi.number().integer().positive(),
-						height: joi.number().integer().positive(),
-					}),
-				),
+				sizes: joi.array().items(joi.number().integer().positive()),
 
 			}),
 
