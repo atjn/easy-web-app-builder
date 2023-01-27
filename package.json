@@ -75,10 +75,13 @@
     "terser": "^5.16.1",
     "tiny-async-pool": "^2.1.0",
     "tiny-glob": "^0.2.9",
-    "wasm-vips": "^0.0.4",
+    "wasm-vips": "file:wasm-vips-0.0.4+3afa522.tgz",
     "workbox-build": "^6.5.4",
     "yargs": "^17.6.2"
   },
+  "bundledDependencies": [
+    "wasm-vips"
+  ],
   "devDependencies": {
     "@atjn/eslint-config": "^6.0.1",
     "eslint": "^8.32.0",

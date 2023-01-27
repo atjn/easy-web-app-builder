@@ -360,8 +360,6 @@ async function minify(type){
 		bar(completedItemProcesses / itemProcessingQueue.length);
 	}
 
-	if(type === "images") vips.shutdown();
-
 	if(itemProcessingQueue.length === 0){
 		bar.hide();
 	}else{
