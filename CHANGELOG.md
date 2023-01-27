@@ -1,3 +1,9 @@
+### 1.0.0-beta5
+- Fixess issues with `wasm-vips` shutdown that would make the Node process abort.
+
+### 1.0.0-beta4
+Includes many breaking changes due to dependency changes. Some functionality is temporary disabled, pending re-implementation.
+
 ### 1.0.0-beta3
 - Hotfix for broken build in beta2.
 
