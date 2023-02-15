@@ -32,7 +32,7 @@ export const logInterfaces = {
 	debug: "Outputs a wealth of information that can help figure out why EWAB is doing *that thing*",
 };
 
-export const supportedImageExtensions = ["jxl", "webp", "jpg", "png"]; //TODO: add support for avif with wasm-vips 0.0.5
+export const supportedImageExtensions = ["jxl", "avif", "webp", "jpg", "png"]; //TODO: add support for avif with wasm-vips 0.0.5
 
 
 /**

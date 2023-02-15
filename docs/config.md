@@ -71,9 +71,9 @@ This is an overview of the entire configuration file.
     convert: {
       enable: Boolean: true
       updateReferences: Boolean: true
-      targetExtension: String: "webp" ("jxl", "webp", "jpg", "png")
+      targetExtension: String: "webp" ("jxl", "avif", "webp", "jpg", "png")
       targetExtensions: [
-        String ("jxl", "webp", "jpg", "png")
+        String ("jxl", "avif", "webp", "jpg", "png")
       ],
       maxSize: Number: 2560
       minSize: Number: 16
@@ -85,6 +85,7 @@ This is an overview of the entire configuration file.
     },
     encoderOptions: {
       jxl: Object
+      avif: Object
       webp: Object
       jpg: Object
       png: Object
@@ -116,9 +117,9 @@ This is an overview of the entire configuration file.
         convert: {
           enable: Boolean: true
           updateReferences: Boolean: true
-          targetExtension: String: "webp" ("jxl", "webp", "jpg", "png")
+          targetExtension: String: "webp" ("jxl", "avif", "webp", "jpg", "png")
           targetExtensions: [
-            String ("jxl", "webp", "jpg", "png")
+            String ("jxl", "avif", "webp", "jpg", "png")
           ],
           maxSize: Number: 2560
           minSize: Number: 16
@@ -130,6 +131,7 @@ This is an overview of the entire configuration file.
         },
         encoderOptions: {
           jxl: Object
+          avif: Object
           webp: Object
           jpg: Object
           png: Object
@@ -142,4 +144,4 @@ This is an overview of the entire configuration file.
 ```
 
 ---
-<p style="opacity:.8;font-style:italic;text-align:right">This documentation was generated for <a href="https://github.com/atjn/easy-web-app-builder#readme">Easy Web App Builder</a> 1.0.0-beta4</p>
+<p style="opacity:.8;font-style:italic;text-align:right">This documentation was generated for <a href="https://github.com/atjn/easy-web-app-builder#readme">Easy Web App Builder</a> 1.0.0-beta5</p>

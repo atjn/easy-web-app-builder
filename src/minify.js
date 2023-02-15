@@ -81,36 +81,42 @@ class ImageEncoding{
 
 class ImageEncodings{
 	encodings = [
-		/*
 		new ImageEncoding({
 			mimeType: "image/avif",
 			extension: "avif",
-			encodingEngine: "TODO",
-			vipsSaveFunction: "avifsave",
+			encodingEngine: "libaom",
+			vipsSaveFunction: "heifsave",
 			encodingOptions: {
 				universal: {
+					compression: vips.ForeignHeifCompression.av1,
+					effort: 6,
 				},
 				auto: {
 					high: {
+						Q: 80,
 					},
 					balanced: {
-					}
+						Q: 40,
+					},
 				},
 				flat: {
 					high: {
+						Q: 90,
 					},
 					balanced: {
+						Q: 80,
 					},
 				},
 				organic: {
 					high: {
+						Q: 70,
 					},
 					balanced: {
-					}
+						Q: 40,
+					},
 				},
 			},
 		}),
-		*/
 		new ImageEncoding({
 			mimeType: "image/jxl",
 			extension: "jxl",
