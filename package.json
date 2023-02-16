@@ -9,10 +9,10 @@
     "ewab": "./bin/cli.js"
   },
   "files": [
-    "/bin/*",
-    "/docs/*",
-    "/lib/*",
-    "/src/*"
+    "/bin/**/*",
+    "/docs/**/*",
+    "/lib/**/*",
+    "/src/**/*"
   ],
   "engines": {
     "node": ">=14.13"
