@@ -19,16 +19,24 @@ import jsdom from "jsdom";
 
 import newVips from "wasm-vips";
 const vips = await newVips({
-	print: (stdout) => {console.log("custom", stdout);},
-	printErr: (stderr) => {console.log("custom", stderr);},
+
+	// Necessary per Feb 2023 in order to enable SVG support
+	// TODO: Should not be necessary in a future stable version
+	dynamicLibraries: ['vips-jxl.wasm', 'vips-heif.wasm', 'vips-resvg.wasm'],
+
+	// Necessary per 2022 to ensure that wasm-vips doesn't just print randomly to the console
+	// TODO: In a future stable version, find a better solution to this
+	print: stdout => {log(`From wasm-vips: ${stdout}`);},
+	printErr: stderr => {log(`Error from wasm-vips: ${stderr}`);},
 	preRun: module => {
-		module.print = (stdout) => {console.log("custom", stdout);};
-		module.printErr = (stderr) => {console.log("custom", stderr);};
+		module.print = stdout => {log(`From wasm-vips: ${stdout}`);};
+		module.printErr = stderr => {log(`Error from wasm-vips: ${stderr}`);};
 	},
 	postRunt: module => {
-		module.print = (stdout) => {console.log("custom", stdout);};
-		module.printErr = (stderr) => {console.log("custom", stderr);};
+		module.print = stdout => {log(`From wasm-vips: ${stdout}`);};
+		module.printErr = stderr => {log(`Error from wasm-vips: ${stderr}`);};
 	},
+
 });
 
 import os from "os";
@@ -328,7 +336,7 @@ async function minify(type){
 
 		if(
 			(type === "files" && !["html", "css", "js", "json", "svg"].includes(extension)) ||
-			(type === "images" && !supportedImageExtensions.includes(extension))
+			(type === "images" && !supportedImageExtensions.includes(extension) && extension !== "svg")
 		){
 			continue;
 		}
@@ -590,18 +598,20 @@ async function processItem(item){
 				const targetExtensions = [ ...new Set([ ...item.fileConfig.images.convert.targetExtensions, item.fileConfig.images.convert.targetExtension ]) ];
 
 				const newImageMeta = ewabRuntime.imagesMeta.new({
-					path: item.path,
+					path: itemRelativePath,
 					hash: originalHash,
 					width: originalSize.width,
 					height: originalSize.height,
-					fileConfig: item.foleConfig,
+					fileConfig: item.fileConfig,
 				});
 
 				for(const sizeConstraint of item.fileConfig.images.convert.enable ? item.fileConfig.images.convert.sizes : [ originalSize.width ]){
 
 					try{
 
-						const fittedImageSize = fitImageSizeToConstraints(originalSize, sizeConstraint);
+						const isSvg = Boolean(getExtension(item.path) === "svg");
+
+						const fittedImageSize = fitImageSizeToConstraints(originalSize, sizeConstraint, isSvg);
 
 						const cachedImagePath = path.join(ewabConfig.cachePath, "items", `${originalHash}-${fittedImageSize.width}w`);
 
@@ -616,7 +626,9 @@ async function processItem(item){
 							reports.push(`${sizeConstraint}, (${targetExtensions.join(", ")}), copied from cache`);
 						}else{
 
-							const image = originalImage.resize(fittedImageSize.width / originalImage.width);
+							const image = isSvg
+								?	vips.Image.svgload(item.path, {scale: fittedImageSize.width / originalImage.width})
+								:	originalImage.resize(fittedImageSize.width / originalImage.width);
 
 							for(const targetExtension of targetExtensions){
 
@@ -625,34 +637,18 @@ async function processItem(item){
 								if(!targetEncoding) throw new Error(`Does not support compressing to image with extension "${targetExtension}"`);
 
 								// Save the image to cache
-								image[targetEncoding.vipsSaveFunction](`${cachedImagePath}.${targetEncoding.extension}`, {
+								const encodingOptions = {
 									...targetEncoding.getEncodingOption(item.fileConfig.images.compress.subject, item.fileConfig.images.compress.quality),
 									...item.fileConfig.images.encoderOptions[targetEncoding.encodingEngine],
-								});
+								};
+								image[targetEncoding.vipsSaveFunction](`${cachedImagePath}.${targetEncoding.extension}`, encodingOptions);
 
-								const loggedQuality = "";
-
-								/*if(engine.mainQualityOption.onlyLossless === true){
-
-									loggedQuality = `only supports highest`;
-
-								}else if(item.fileConfig.images.encoderOptions[engine.name][engine.mainQualityOption.key]){
-
-									loggedQuality = `${item.fileConfig.images.encoderOptions[engine.name][engine.mainQualityOption.key]} (directly set in config)`;
-
-								}else if(item.fileConfig.images.quality === 1){
-
-									loggedQuality = `highest (as set in config)`;
-									options[engine.name] = { ...options[engine.name], ...engine.quality.lossless };
-
-								}else{
-
-									//TODO
-
-
-								}*/
-
-								reports.push(`${sizeConstraint}, ${targetExtension}, quality: ${loggedQuality}`);
+								const loggedOptions = [];
+								for(const key of ["Q", "distance", "compression", "near_lossless", "lossless"]){
+									const value = encodingOptions[key];
+									if(value) loggedOptions.push(`${key}: ${value}`);
+								}
+								reports.push(`${sizeConstraint}, ${targetExtension}, compressed with settings ${loggedOptions.join(", ")}`);
 
 							}
 						
@@ -660,9 +656,11 @@ async function processItem(item){
 						
 						await Promise.all(targetExtensions.map(targetExtension => {
 							const newImagePath = transformImagePath(item.path, fittedImageSize.width, {extension: targetExtension});
+							const targetEncoding = imageEncodings.match(targetExtension);
 							newImageMeta.newVersion({
 								path: newImagePath,
 								type: targetExtension,
+								encoding: targetEncoding,
 								width: fittedImageSize.width,
 								height: fittedImageSize.height,
 								constraint: sizeConstraint,
@@ -962,8 +960,12 @@ function processConvertSettings(convertConfig, originalSize){
 
 	let extraSizes = [
 		convertConfig.maxSize,
-		3840, // Full screen UHD Landscape
-		2160, // Full screen UHD Portrait
+		7680, // Full screen 8K UHD Landscape
+		4320, // Full screen 8K UHD Portrait
+		5120, // Full screen 5K UHD Landscape
+		2880, // Full screen 5K UHD Portrait
+		3840, // Full screen 4K UHD Landscape
+		2160, // Full screen 4K UHD Portrait
 		2560, // Full screen QHD Landscape
 		1440, // Full screen QHD Portrait
 		1920, // Full screen SHD Landscape
@@ -972,9 +974,9 @@ function processConvertSettings(convertConfig, originalSize){
 		265,  // Small image
 		196,  // Large icon
 		128,  // Medium icon
-		64,   // Medium icon
-		32,   // Small icon
-		16,   // Small icon
+		64,   // Small icon
+		32,   // Very small icon
+		16,   // Very small icon
 		convertConfig.minSize,
 	];
 
@@ -985,7 +987,7 @@ function processConvertSettings(convertConfig, originalSize){
 		return true;
 	});
 
-	// Make sure they are sorted from largest to smallest to make sure largest images
+	// Make sure they are sorted from largest to smallest to make sure largeer images
 	// exclude smaller images, and not vice-versa
 	extraSizes.sort((a, b) => {return b - a;});
 
@@ -1018,21 +1020,25 @@ function transformImagePath(path, width, encoding){
 
 /**
  * Takes a specific image size, and makes sure it is neither wider, nor taller than the given constraint size, while preserving aspect ratio.
+ * By default, the image will not be resized to be larger than it's original size. This can be enabled by setting `allowOversizing` to true.
  * 
  * @param {object}	imageSize			- The current image size.
  * @param {number}	imageSize.height	- The current image height.
  * @param {number}	imageSize.width		- The current image width.
  * @param {number}	imageConstraint		- The constraint (both height and width).
+ * @param {boolean}	allowOversizing		- Whether or not the image is allowed to become larger than it's original size.
  * 
  * @returns {object} - The new image size, fitted to the constraints.
  */
-function fitImageSizeToConstraints(imageSize, imageConstraint){
+function fitImageSizeToConstraints(imageSize, imageConstraint, allowOversizing = false){
 
-	const resizeRatio = Math.min(
+	const resizeRatios = [
 		imageConstraint / imageSize.height,
 		imageConstraint / imageSize.width,
-		1,
-	);
+	];
+	if(!allowOversizing) resizeRatios.push(1);
+
+	const resizeRatio = Math.min(...resizeRatios);
 
 	return {
 		height: Math.round( imageSize.height * resizeRatio ),
@@ -1094,6 +1100,21 @@ class ImageMeta extends ImageVersion{
 		const newVersion = new ImageVersion(keys);
 		this.versions.push(newVersion);
 		return newVersion;
+	}
+
+	matchVersionClosestToWidth(entries, desiredWidth, canBeSmaller, canBeLarger){
+		const candidates = this.matchAllVersions(entries);
+
+		let bestCandidate;
+		for(const version of candidates){
+			const delta = version.width - desiredWidth;
+			if(!bestCandidate || Math.abs(delta) < Math.abs(bestCandidate.width - desiredWidth)){
+				if( (canBeSmaller || delta >= 0) && (canBeLarger || delta <= 0) ){
+					bestCandidate = version;
+				}
+			}
+		}
+		return bestCandidate;
 	}
 
 	matchVersion(entries = {}){

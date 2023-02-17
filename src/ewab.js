@@ -50,9 +50,11 @@ export default async function (callConfig = {}){
 
 	await minify("remove");
 	
-	await icons.add();
+	await icons.identify();
 
 	await minify("images");
+
+	await icons.add();
 
 	await serviceworker.link();
 

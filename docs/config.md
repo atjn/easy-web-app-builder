@@ -27,13 +27,25 @@ This is an overview of the entire configuration file.
     //if custom icons should be added to the app
     add: Boolean: true
     
-    //path to the icon to generate all other icons from
-    source: String
+    //path to the icons to generate all other icons from. Icons are split into purposes: https://developer.mozilla.org/en-US/docs/Web/Manifest/icons#values
+    source: {
+      any: String
+      maskable: String
+      monochrome: String
+    },
     
     //list of all icons currently in the project
-    list: [
-      String
-    ],
+    list: {
+      any: [
+        String
+      ],
+      maskable: [
+        String
+      ],
+      monochrome: [
+        String
+      ],
+    },
     
     blockList: [
       String
@@ -75,9 +87,9 @@ This is an overview of the entire configuration file.
       targetExtensions: [
         String ("jxl", "avif", "webp", "jpg", "png")
       ],
-      maxSize: Number: 2560
-      minSize: Number: 16
-      sizeSteps: Number: 0.5
+      maxSize: Number: 3840
+      minSize: Number: 64
+      sizeSteps: Number: 0.6
       size: Number
       sizes: [
         Number
@@ -121,9 +133,9 @@ This is an overview of the entire configuration file.
           targetExtensions: [
             String ("jxl", "avif", "webp", "jpg", "png")
           ],
-          maxSize: Number: 2560
-          minSize: Number: 16
-          sizeSteps: Number: 0.5
+          maxSize: Number: 3840
+          minSize: Number: 64
+          sizeSteps: Number: 0.6
           size: Number
           sizes: [
             Number

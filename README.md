@@ -100,7 +100,9 @@ If EWAB is using the wrong image as favicon, you can tell it exactly which icon 
 ```js
 {
   icons: {
-    source: "path/to/your/favicon.svg",
+    source: {
+      any: "path/to/your/favicon.svg",
+    },
   },
 }
 ```
