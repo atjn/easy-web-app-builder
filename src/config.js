@@ -5,7 +5,7 @@
  * These functions handle everything related to setting up and managing the config object.
  */
 
-import path from "path";
+import path from "node:path";
 import minimatch from "minimatch";
 import objectHash from "object-hash";
 import joiBase from "joi";

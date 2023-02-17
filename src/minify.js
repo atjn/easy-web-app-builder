@@ -6,7 +6,7 @@
  * Input is always an absolute file path, output is saved to cache with a hash-reference to the original file.
  */
 
-import path from "path";
+import path from "node:path";
 import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
 import { log, bar } from "./log.js";
@@ -39,7 +39,7 @@ const vips = await newVips({
 
 });
 
-import os from "os";
+import os from "node:os";
 
 
 import glob from "tiny-glob";

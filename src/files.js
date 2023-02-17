@@ -5,9 +5,9 @@
  * These functions help ensure a baseline of valid folders, files, and code paths in the source website and project in general.
  */
 
-import path from "path";
+import path from "node:path";
 import fs from "fs-extra";
-import os from "os";
+import os from "node:os";
 
 import { log } from "./log.js";
 import { fileExists, folderExists, resolveURL, getSubfolders, ewabPackage } from "./tools.js";

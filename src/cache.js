@@ -5,7 +5,7 @@
  * These functions do most of the hard work related to managing the cache. A lot of other functions then use and manipulate the cache directly.
  */
 
-import path from "path";
+import path from "node:path";
 import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
 

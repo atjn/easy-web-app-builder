@@ -5,7 +5,7 @@
  * fg.
  */
 
-import path from "path";
+import path from "node:path";
 import fs from "fs-extra";
 
 import { hashElement as folderHash } from "folder-hash";

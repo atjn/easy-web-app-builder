@@ -1,5 +1,5 @@
 import fs from "fs-extra";
-import path from "path";
+import path from "node:path";
 import { ewabSourcePath } from "../src/tools.js";
 import { log, bar } from "../src/log.js";
 

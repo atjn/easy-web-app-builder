@@ -13,7 +13,7 @@ prompt.registerPrompt("file-tree", fileTree);
 import chalk from "chalk";
 import glob from "tiny-glob";
 
-import path from "path";
+import path from "node:path";
 import fs from "fs-extra";
 
 import { fileExists, deepMerge, ewabPackage } from "../src/tools.js";

@@ -4,9 +4,9 @@
  * This file contains some common functions that are used across EWAB.
  */
 
-import path from "path";
+import path from "node:path";
 import fs from "fs-extra";
-import url from "url";
+import url from "node:url";
 
 import lodash from "lodash";
 
