@@ -83,7 +83,7 @@ By default, EWAB will find your website's favicon, generate it in different size
 insert[setConfigValue icons add false]
 
 If EWAB is using the wrong image as favicon, you can tell it exactly which icon it should use by setting:
-insert[setConfigValue icons source "path/to/your/favicon.svg"]
+insert[setConfigValue icons source any "path/to/your/favicon.svg"]
 
 ## Images
 

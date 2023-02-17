@@ -11,7 +11,7 @@ import os from "os";
 
 import { log } from "./log.js";
 import { fileExists, folderExists, resolveURL, getSubfolders, ewabPackage } from "./tools.js";
-import config, { defaults } from "./config.js";
+import config, { defaults, supportedIconPurposes } from "./config.js";
 
 import glob from "tiny-glob";
 import jsdom from "jsdom";
@@ -287,14 +287,16 @@ async function begin(){
 
 	log("Discovering and verifying icons");
 
-	ewabConfig.icons.list = ewabConfig.icons.list.filter(iconPath => {
-		if(fileExists(path.join(ewabConfig.workPath, iconPath))){
-			return true;
-		}else{
-			log("warning", `Found a reference to an icon '${iconPath}' in the config, but was unable to find an icon at that path. Please remove any broken references to icons.`);
-			return false;
-		}
-	});
+	for(const purpose of supportedIconPurposes){
+		ewabConfig.icons.list[purpose] = ewabConfig.icons.list[purpose].filter(iconPath => {
+			if(fileExists(path.join(ewabConfig.workPath, iconPath))){
+				return true;
+			}else{
+				log("warning", `Found a reference to an icon '${iconPath}' in the config, but was unable to find an icon at that path. Please remove any broken references to icons.`);
+				return false;
+			}
+		});
+	}
 
 	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
 
@@ -313,30 +315,58 @@ async function begin(){
 			}
 		}
 
-		log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons in '${path.relative(ewabConfig.workPath, markupPath)}'.${foundIcons.length > 0 ? " Adding them to the icons list." : ""}`);
+		log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons with purpose "any" in '${path.relative(ewabConfig.workPath, markupPath)}'.${foundIcons.length > 0 ? " Adding them to the icons list." : ""}`);
 
-		ewabConfig.icons.list.push(...foundIcons);
+		ewabConfig.icons.list.any.push(...foundIcons);
 
 	}
 
-	const foundManifestIcons = [];
+	const foundManifestIcons = {};
+	for(const purpose of supportedIconPurposes) foundManifestIcons[purpose] = [];
+
 	if(!Array.isArray(ewabRuntime.manifest.icons)) ewabRuntime.manifest.icons = [];
 	for(const icon of ewabRuntime.manifest.icons){
 		if(icon.src){
 			const iconPath = path.relative(ewabConfig.workPath, resolveURL(ewabConfig.workPath, path.join(ewabConfig.workPath, ewabConfig.manifestPath), icon.src));
+
+			const foundPurposes = [];
+			if(typeof icon.purpose === "string"){
+				for(const purpose of supportedIconPurposes) if(icon.purpose.includes(purpose)) foundPurposes.push(purpose);
+			}
+			if(foundPurposes.length === 0){
+				foundPurposes.push("any");
+			}
+
 			if(fileExists(path.join(ewabConfig.workPath, iconPath))){
-				foundManifestIcons.push(iconPath);
+				for(const purpose of foundPurposes) foundManifestIcons[purpose].push(iconPath);
 			}else{
 				log("warning", `Found a reference to an icon '${iconPath}' in the manifest, but was unable to find an icon at that path. Please remove any broken references to icons.`);
 			}
 		}
 	}
-	log(`${foundManifestIcons.length > 0 ? `Found ${foundManifestIcons.length}` : "Did not find any"} references to icons in manifest.${foundManifestIcons.length > 0 ? " Adding them to the icons list." : ""}`);
-	ewabConfig.icons.list.push(...foundManifestIcons);
+	for(const purpose of supportedIconPurposes){
+		const count = foundManifestIcons[purpose].length;
+		log(`${count > 0 ? `Found ${count}` : "Did not find any"} references to icons with purpose "${purpose}" in manifest.${count > 0 ? " Adding them to the icons list." : ""}`);
+	
+		ewabConfig.icons.list[purpose].push(...foundManifestIcons[purpose]);
 
-	//Remove duplicates
-	ewabConfig.icons.list = [ ...new Set([ ...ewabConfig.icons.list ]) ];
+		//Remove duplicates
+		ewabConfig.icons.list[purpose] = [ ...new Set([ ...ewabConfig.icons.list[purpose] ]) ];
+	}
 
+	// Ensure that the same icon has not been defined for multiple purposes
+	const iconPurposeMap = new Map();
+	for(const purpose of supportedIconPurposes){
+		for(const icon of ewabConfig.icons.list[purpose]){
+			iconPurposeMap.set(
+				icon,
+				(iconPurposeMap.get(icon) || []).push(purpose),
+			);
+		}
+	}
+	for(const [ icon, purposes ] of iconPurposeMap.entries()){
+		if(purposes.length > 1) log("warning", `The icon ${icon} is referenced to be for the following purposes: ${purposes.join(", ")}. An icon cannot be formatted to work with multiple purposes, read more here: https://developer.mozilla.org/en-US/docs/Web/Manifest/icons#values`);
+	}
 
 
 	log("Collecting script metadata");

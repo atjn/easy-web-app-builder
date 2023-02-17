@@ -21,7 +21,7 @@ export const defaults = {
 	configName: "ewabconfig",
 	interface: "modern",
 	imageExtension: "webp",
-	imageExtensions: ["jxl", "webp"],
+	imageExtensions: ["webp", "jpg"],
 };
 
 export const logInterfaces = {
@@ -32,7 +32,9 @@ export const logInterfaces = {
 	debug: "Outputs a wealth of information that can help figure out why EWAB is doing *that thing*",
 };
 
-export const supportedImageExtensions = ["jxl", "avif", "webp", "jpg", "png"]; //TODO: add support for avif with wasm-vips 0.0.5
+export const supportedImageExtensions = ["jxl", "avif", "webp", "jpg", "png"];
+
+export const supportedIconPurposes = ["any", "maskable", "monochrome"];
 
 
 /**
@@ -74,18 +76,23 @@ async function generateMain(callConfig){
 	mainConfig.cachePath = mainConfig.cachePath ?? path.join(mainConfig.rootPath, `.${mainConfig.alias}-cache`);
 
 	mainConfig.fileExceptions.push(
-		{
-			glob: `${mainConfig.alias}/icons/**/*`,
-			images: {
-				compress: false, //TEMPORARY
-				convert: false,
-				targetExtension: "png",
-			},
-		},
-		{
+		{	
+			// All EWAB files are built as modules. This ensures that they are also minified as such.
 			glob: `${mainConfig.alias}/**/*`,
 			files: {
 				module: true,
+			},
+		},
+		{
+			// By default, there is no reason to generate raster versions of an SVG.
+			glob: "**/*.svg",
+			images: {
+				compress: {
+					enable: false,
+				},
+				convert: {
+					enable: false,
+				},
 			},
 		},
 	);
@@ -217,11 +224,9 @@ const options = {
 
 			add: joi.boolean().default(true).description("if custom icons should be added to the app"),
 
-			source: joi.string().description("path to the icon to generate all other icons from"),
+			source: joi.object([...supportedIconPurposes].reverse().reduce((object, purpose) => { return { [purpose]: joi.string(), ...object }; }, {})).description("path to the icons to generate all other icons from. Icons are split into purposes: https://developer.mozilla.org/en-US/docs/Web/Manifest/icons#values"),
 
-			list: joi.array().items(
-				joi.string(),
-			).description("list of all icons currently in the project"),
+			list: joi.object([...supportedIconPurposes].reverse().reduce((object, purpose) => { return { [purpose]: joi.array().items(joi.string()), ...object }; }, {})).description("list of all icons currently in the project"),
 
 			blockList: joi.array().items(
 				joi.string(),
@@ -229,11 +234,9 @@ const options = {
 
 			mergeMode: joi.object({
 
-				index: joi.string().default("override")
-					.valid("override", "combine"),
+				index: joi.string().default("override").valid("override", "combine"),
 
-				manifest: joi.string().default("override")
-				.valid("override", "combine"),
+				manifest: joi.string().default("override").valid("override", "combine"),
 
 			}),
 
@@ -279,6 +282,7 @@ const options = {
 
 		images: joi.object({
 
+			//TODO: Change to "keepUnreferenced", which streamlines the code a lot
 			keepOriginal: joi.boolean().default(true),
 
 			compress: joi.object({
@@ -305,10 +309,10 @@ const options = {
 					joi.string().valid(...supportedImageExtensions),
 				).default(defaults.imageExtensions),
 
-				maxSize: joi.number().integer().positive().default(2560),
-				minSize: joi.number().integer().positive().default(16),
+				maxSize: joi.number().integer().positive().default(3840),
+				minSize: joi.number().integer().positive().default(64),
 
-				sizeSteps: joi.number().positive().default(0.50),
+				sizeSteps: joi.number().positive().default(0.60),
 
 				size: joi.number().integer().positive(),
 

@@ -40,8 +40,6 @@ async function ensure(){
 		await Promise.all(
 			[
 				"items",
-				"icons",
-				"icons-injectables",
 				"serviceworker",
 			].map(folder => fs.ensureDir(path.join(ewabConfig.cachePath, folder))),
 		);
