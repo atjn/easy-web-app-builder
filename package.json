@@ -83,10 +83,13 @@
   ],
   "devDependencies": {
     "@atjn/eslint-config": "^7.0.0",
+    "@types/clean-css": "^4.2.6",
     "@types/folder-hash": "^4.0.2",
     "@types/fs-extra": "^11.0.1",
+    "@types/html-minifier-terser": "^7.0.0",
     "@types/jsdom": "^21.1.0",
     "@types/object-hash": "^3.0.2",
+    "@types/tiny-async-pool": "^2.0.0",
     "eslint": "^8.34.0",
     "eslint-plugin-jsdoc": "^39.8.0",
     "eslint-plugin-promise": "^6.1.1",
