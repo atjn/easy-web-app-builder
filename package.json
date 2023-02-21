@@ -15,7 +15,7 @@
     "/src/**/*"
   ],
   "engines": {
-    "node": ">=14.13"
+    "node": ">=16.15"
   },
   "scripts": {
     "lint:js": "eslint --fix \"**/*.js\"",
