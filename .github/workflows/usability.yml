@@ -23,8 +23,9 @@ jobs:
         node-version: [14.13, lts/-1, lts/*, latest]
         os: [ubuntu-latest]
         include:
-          - node-version: lts/*
-            os: windows-latest
+        # TODO: Add support for Windows
+        #  - node-version: lts/*
+        #    os: windows-latest
           - node-version: lts/*
             os: macos-latest
 
