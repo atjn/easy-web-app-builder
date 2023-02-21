@@ -44,5 +44,5 @@ jobs:
       - name: Install dependencies
         run: npm install-clean
 
-      - name: Test usability
+      - name: Run unit tests
         run: npm run test:unit
