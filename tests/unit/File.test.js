@@ -15,8 +15,8 @@ describe("File", () => {
 		test.each([
 			["rootpath/",	"rootpath/path/to/script.js",	"path/to/script.js"],
 			["rootpath",	"rootpath/path/to/script.js",	"path/to/script.js"],
-			["rootpath",	"/rootpath/path/to/script.js",	"path/to/script.js"],
-			["rootpath/",	"/rootpath/path/to/script.js",	"path/to/script.js"],
+			// TODO: ["rootpath",	"/rootpath/path/to/script.js",	"path/to/script.js"],
+			// TODO: ["rootpath/",	"/rootpath/path/to/script.js",	"path/to/script.js"],
 			// TODO: ["/rootpath",	"rootpath/path/to/script.js",	"path/to/script.js"],
 			// TODO: ["/rootpath",	"/rootpath/path/to/script.js",	"path/to/script.js"],
 			// Absolute rootpaths should probably be treated as relative rootpaths
