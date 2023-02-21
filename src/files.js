@@ -10,11 +10,10 @@ import fs from "fs-extra";
 import os from "node:os";
 
 import { log } from "./log.js";
-import { fileExists, folderExists, resolveURL, getSubfolders, ewabPackage } from "./tools.js";
-import config, { defaults, supportedIconPurposes } from "./config.js";
+import { fileExists, folderExists, getSubfolders, generateRelativeAppUrl, resolveAppUrl, ewabPackage, AppFile, getAllAppMarkupFiles } from "./tools.js";
+import { defaults, supportedIconPurposes } from "./config.js";
 
 import glob from "tiny-glob";
-import jsdom from "jsdom";
 import escapeStringRegexp from "escape-string-regexp";
 
 
@@ -60,14 +59,14 @@ async function begin(){
 				
 				const candidatePath = path.join(ewabConfig.rootPath, match.name);
 
-				if(fileExists(path.join(candidatePath, "index.html"))){
+				if(await fileExists(path.join(candidatePath, "index.html"))){
 					score++;
 				}
 				if(await glob("**/*.{html,htm}", {cwd: candidatePath, absolute: true}).length === 0){
 					score = score - 1;
 				}
 
-				if(fileExists(path.join(candidatePath, "manifest.json"))){
+				if(await fileExists(path.join(candidatePath, "manifest.json"))){
 					score++;
 				}
 
@@ -85,9 +84,9 @@ async function begin(){
 		}
 
 		if(matches.length > 1){
-			log("warning", `Not sure which folder to use as input. Using '${matches[0].name}' from the following options: ${matches.map(match => match.name).join(", ")}.`);
+			log("warning", `Not sure which folder to use as input. Using "${matches[0].name}" from the following options: ${matches.map(match => match.name).join(", ")}.`);
 		}else{
-			log(`Decided to use '${matches[0].name}' as input folder`);
+			log(`Decided to use "${matches[0].name}" as input folder`);
 		}
 
 		ewabConfig.inputPath = matches[0].name;
@@ -101,42 +100,42 @@ async function begin(){
 		const name = decideOutputFolderName(ewabConfig.inputPath);
 		const candidatePath = path.join(ewabConfig.rootPath, name);
 
-		if(fileExists(candidatePath)){
+		if(await fileExists(candidatePath)){
 
 			const backupName = `${ewabConfig.alias}-backup-${name}`;
-			log("warning", `The final webapp will be saved to the folder '${name}', but a file already exists at that path. The file has been backed up as '${backupName}'.`);
+			log("warning", `The final webapp will be saved to the folder "${name}", but a file already exists at that path. The file has been backed up as "${backupName}".`);
 			await fs.rename(candidatePath, path.join(ewabConfig.rootPath, backupName));
 		
-		}else if(folderExists(candidatePath) && (await fs.readdir(candidatePath)).length > 0){
+		}else if((await folderExists(candidatePath)) && (await fs.readdir(candidatePath)).length > 0){
 
-			log(`A folder called '${name}' already exists. Will have to guess if it is safe to overwrite it.`);
+			log(`A folder called "${name}" already exists. Will have to guess if it is safe to overwrite it.`);
 
 			if(
 				[
 					candidatePath.toLowerCase().includes(ewabConfig.alias.toLowerCase()),
-					( ewabConfig.manifestPath && fileExists(path.join(candidatePath, ewabConfig.manifestPath)) ),
-					( folderExists(path.join(candidatePath, ewabConfig.alias)) || folderExists(path.join(candidatePath, defaults.alias)) ),
-					( fileExists(path.join(ewabConfig.rootPath, ewabConfig.inputPath, "index.html")) && fileExists(path.join(candidatePath, "index.html")) ),
+					( ewabConfig.manifestPath && await fileExists(path.join(candidatePath, ewabConfig.manifestPath)) ),
+					( (await folderExists(path.join(candidatePath, ewabConfig.alias))) || (await folderExists(path.join(candidatePath, defaults.alias))) ),
+					( await fileExists(path.join(ewabConfig.rootPath, ewabConfig.inputPath, "index.html")) && await fileExists(path.join(candidatePath, "index.html")) ),
 				]
 					.reduce(( count, assertion ) => count + (assertion ? 1 : 0)) < 2
 			){
 				let backupName = `${ewabConfig.alias}-backup-${name}`;
-				if(fs.existsSync(backupName)){
+				if(await fs.exists(backupName)){
 					const backupBase = backupName;
 					let increment = 0;
-					while(fs.existsSync(backupName)){
+					while(await fs.exists(backupName)){
 						increment++;
 						backupName = `${backupBase}-${increment}`;
 					}
 				}
-				log("warning", `The final webapp will be saved to the folder '${name}', but was unsure if the existing contents of that folder was important, so it has been backed up as '${backupName}'.`);
+				log("warning", `The final webapp will be saved to the folder "${name}", but was unsure if the existing contents of that folder was important, so it has been backed up as "${backupName}".`);
 				await fs.rename(candidatePath, path.join(ewabConfig.rootPath, backupName));
 			}else{
-				log(`It seems like the '${name}' folder contains an old EWAB output app, so it should be safe to overwrite.`);
+				log(`It seems like the "${name}" folder contains an old EWAB output app, so it should be safe to overwrite.`);
 			}
 
 		}else{
-			log(`Decided to call it '${name}'.`);
+			log(`Decided to call it "${name}".`);
 		}
 
 		ewabConfig.outputPath = name;
@@ -149,7 +148,7 @@ async function begin(){
 	await fs.ensureDir(path.join(ewabConfig.rootPath, ewabConfig.outputPath));
 	ewabConfig.workPath = await fs.mkdtemp(path.join(os.tmpdir(), `node-${ewabPackage.name}-`));
 
-	log(`Copying source files from '${path.join(ewabConfig.inputPath)}' to the work folder at '${path.relative(ewabConfig.rootPath, ewabConfig.workPath)}'`);
+	log(`Copying source files from "${path.normalize(ewabConfig.inputPath)}" to the work folder at "${path.normalize(ewabConfig.workPath)}"`);
 
 	await fs.copy(path.join(ewabConfig.rootPath, ewabConfig.inputPath), ewabConfig.workPath);
 	await fs.ensureDir(path.join(ewabConfig.workPath, ewabConfig.alias));
@@ -157,28 +156,28 @@ async function begin(){
 
 	log("Making sure HTML files are usable");
 
-	const markupPaths = await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true});
 	let markupHeads = 0;
-	for(const markupPath of markupPaths){
-
-		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
-
-		if(!html?.window?.document){
-			log("warning", `The HTML file '${path.relative(ewabConfig.workPath, markupPath)}' seems to be invalid. This could cause problems later on, please fix it.`);
+	let markups = 0;
+	for await (const { markupFile, markup } of getAllAppMarkupFiles()){
+		if(!markup?.window?.document){
+			log("warning", `The HTML file "${markupFile}" seems to be invalid. This could cause problems later on, please fix it.`);
 		}
-		if(html?.window?.document?.head){
+		if(markup?.window?.document?.head){
 			markupHeads++;
 		}
+		markups++;
 	}
-	if(markupPaths.length > 0 && markupHeads === 0) log("warning", `None of the HTML files in this project have a <head>. This will cause problems later on, please fix it.`);
+	if(markups > 0 && markupHeads === 0) log("warning", `None of the HTML files in this project have a <head>. This will cause problems later on, please fix it.`);
 
 	log(`Trying to find a link to the site manifest`);
 
 	log("Looking in config");
 	if(ewabConfig.manifestPath){
 
-		if(fileExists(path.join(ewabConfig.workPath, ewabConfig.manifestPath))){
-			if(await readManifest(path.join(ewabConfig.workPath, ewabConfig.manifestPath))){
+		const possibleManifestFile = new AppFile({appPath: ewabConfig.manifestPath});
+
+		if(await possibleManifestFile.exists()){
+			if(await readManifest(possibleManifestFile)){
 				log(`The manifest link in config seems valid`);
 			}else{
 				ewabRuntime.manifest = {};
@@ -190,35 +189,26 @@ async function begin(){
 
 	}
 
+	// TODO: This can be improved. It should find the manifest file that looks most like a manifest file. Could also complain about multiple manifest files, and maybe try to merge them.
 	if(!ewabConfig.manifestPath){
 		log("Looking in HTML files");
 
-		const possibleManifestPaths = [];
+		const possibleManifestFiles = [];
 
-		for(const markupPath of markupPaths){
-			const html = new jsdom.JSDOM(await fs.readFile(markupPath));
-			if(!html?.window?.document?.head) continue;
+		for await (const { markupFile, markup } of getAllAppMarkupFiles()){
+			if(!markup?.window?.document?.head) continue;
 			
-			for(const manifestLink of html.window.document.head.querySelectorAll("link[rel=manifest]")){
-				possibleManifestPaths.push(resolveURL(ewabConfig.workPath, markupPath, manifestLink.href));
+			for(const manifestLink of markup.window.document.head.querySelectorAll("link[rel=manifest]")){
+				possibleManifestFiles.push(resolveAppUrl(markupFile, manifestLink.href));
 			}
 		}
 
-		//Remove duplicates, then remove any that doesn't point to a file
-		const manifestPaths = [ ...new Set(possibleManifestPaths) ].filter(manifestPath => fileExists(manifestPath));
+		const manifestFiles = [ ...new Set(possibleManifestFiles) ];
 
-		for(const manifestPath of manifestPaths){
-			if(await readManifest(manifestPath)){
-				log(`Found a link to a valid manifest file in an HTML file`);
-			}else{
-				if(manifestPaths.indexOf(manifestPath) + 1 === manifestPaths.length){
-					ewabRuntime.manifest = {};
-					ewabConfig.manifestPath = path.relative(ewabConfig.workPath, manifestPath);
-					log("This is the last manifest file found, so keeping it despite it being invalid.");
-					break;
-				}else{
-					log("Also found other manifest files, trying to see if they are valid.");
-				}
+		findValidManifest: for(const manifestFile of manifestFiles){
+			if(await readManifest(manifestFile)){
+				log(`Found a link to a valid manifest file (${manifestFile}) in an HTML file`);
+				break findValidManifest;
 			}
 		}
 
@@ -227,60 +217,63 @@ async function begin(){
 	if(!ewabConfig.manifestPath){
 		log("Trying to guess the path");
 		
-		const possibleManifestPath = path.join(ewabConfig.workPath, "manifest.json");
-		if(fileExists(possibleManifestPath)){
-			if(await readManifest(possibleManifestPath)){
-				log(`Guessed the manifest path: ${path.relative(ewabConfig.workPath, possibleManifestPath)}`);
+		const possibleManifestFile = new AppFile({appPath: "manifest.json"});
+		if(await possibleManifestFile.exists()){
+			if(await readManifest(possibleManifestFile)){
+				log(`Guessed the manifest path: ${possibleManifestFile}`);
 			}else{
-				log(`Guessed a valid manifest path, but the file seems invalid, so won't use: ${path.relative(ewabConfig.workPath, possibleManifestPath)}`);
+				log(`Guessed a manifest path, but the file seems invalid, so won't use: ${possibleManifestFile}`);
 			}
 		}
 	}
 
 	if(!ewabConfig.manifestPath){
 		log("warning", `No site manifest found, so using a generic one instead. You can generate one in your source folder with the command: ${ewabPackage.name} scaffold "manifest"`);
-		await fs.copy(path.join(ewabRuntime.sourcePath, "lib/scaffolding/manifest.json"), path.join(ewabConfig.workPath, "manifest.json"));
-		await readManifest(path.join(ewabConfig.workPath, "manifest.json"));
+		const defaultManifestFile = new AppFile({appPath: "manifest.json"});
+
+		await fs.copy(path.join(ewabRuntime.sourcePath, "lib/scaffolding/manifest.json"), defaultManifestFile.workPath);
+		await readManifest(defaultManifestFile);
 	}
 
 	/**
 	 * Tries to read a manifest file. If succesful, adds it to internal memory. If not, logs a warning.
 	 * 
-	 * @param	{string}	manifestPath	- Absolute path to the manifest file.
-	 *  
-	 * @returns 	{boolean}	- If the read was succesful.
+	 * @param {AppFile} manifestFile - Absolute path to the manifest file.
+	 * @returns {Promise<boolean>} - If the read was succesful.
 	 */
-	async function readManifest(manifestPath){
+	async function readManifest(manifestFile){
+		if(!(await manifestFile.exists())){
+			log("warning", `The manifest file "${manifestFile}" does not seem to exist. Please remove any references to non-existent manifests from your app.`);
+			return false;
+		}
 		try{
-			ewabRuntime.manifest = await fs.readJson(manifestPath);
-			ewabConfig.manifestPath = path.relative(ewabConfig.workPath, manifestPath);
+			ewabRuntime.manifest = await fs.readJson(manifestFile.workPath);
+			ewabConfig.manifestPath = manifestFile.appPath;
 			return true;
 		}catch(error){
-			log("warning", `The manifest file '${ewabConfig.manifestPath}' seems to be invalid. This might cause problems later on, please fix it.`);
+			log("warning", `The manifest file "${manifestFile}" seems to be invalid. This might cause problems later on, please fix it.`);
 			return false;
 		}
 	}
 
 	log("Adding links to the site manifest");
-	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
+	for await (const { markupFile, markup } of getAllAppMarkupFiles()){
 
-		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
-
-		if(!html?.window?.document?.head){
-			log(`${path.relative(ewabConfig.workPath, markupPath)} doesn't have a <head>, so won't add a reference to manifest.`);
+		if(!markup?.window?.document?.head){
+			log(`${markupFile} doesn't have a <head>, so won't add a reference to manifest.`);
 			continue;
 		}
 
-		log(`Adding a reference to the manifest file in ${path.relative(ewabConfig.workPath, markupPath)} (overriding any existing).`);
+		log(`Adding a reference to the manifest file in ${markupFile} (overriding any existing).`);
 
-		for(const manifestLink of html.window.document.head.querySelectorAll("link[rel=manifest]")) manifestLink.remove();
+		for(const manifestLink of markup.window.document.head.querySelectorAll("link[rel=manifest]")) manifestLink.remove();
 
-		const relativeManifestLink = path.relative(path.join(markupPath, ".."), path.join(ewabConfig.workPath, ewabConfig.manifestPath));
+		const manifestLinkElement = markup.window.document.createElement("link");
+		manifestLinkElement.rel = "manifest";
+		manifestLinkElement.href = generateRelativeAppUrl(markupFile, new AppFile({appPath: ewabConfig.manifestPath}));
+		markup.window.document.head.appendChild(manifestLinkElement);
 
-		const manifestLinkElement = html.window.document.createElement("link"); manifestLinkElement.rel = "manifest"; manifestLinkElement.href = relativeManifestLink;
-		html.window.document.head.appendChild(manifestLinkElement);
-		await fs.writeFile(markupPath, html.serialize());
-
+		await markupFile.write(markup.serialize());
 	}
 
 
@@ -288,36 +281,35 @@ async function begin(){
 	log("Discovering and verifying icons");
 
 	for(const purpose of supportedIconPurposes){
-		ewabConfig.icons.list[purpose] = ewabConfig.icons.list[purpose].filter(iconPath => {
-			if(fileExists(path.join(ewabConfig.workPath, iconPath))){
+		ewabConfig.icons.list[purpose] = ewabConfig.icons.list[purpose].filter(async iconPath => {
+			const iconFile = new AppFile({appPath: iconPath});
+			if(await iconFile.exists()){
 				return true;
 			}else{
-				log("warning", `Found a reference to an icon '${iconPath}' in the config, but was unable to find an icon at that path. Please remove any broken references to icons.`);
+				log("warning", `Found a reference to an icon "${iconFile}" in the config, but was unable to find an icon at that path. Please remove any broken references to icons.`);
 				return false;
 			}
 		});
 	}
 
-	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
-
-		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
+	for await (const { markupFile, markup } of getAllAppMarkupFiles()){
 
 		const foundIcons = [];
 
-		for(const icon of html.window.document.head.querySelectorAll("link[rel*=icon]")){
+		for(const icon of markup.window.document.head.querySelectorAll("link[rel*=icon]")){
 			if(icon.href){
-				const iconPath = path.relative(ewabConfig.workPath, resolveURL(ewabConfig.workPath, markupPath, icon.href));
-				if(fileExists(path.join(ewabConfig.workPath, iconPath))){
-					foundIcons.push(iconPath);
+				const iconFile = resolveAppUrl(markupFile, icon.href);
+				if(await iconFile.exists()){
+					foundIcons.push(iconFile);
 				}else{
-					log("warning", `Found a reference to an icon '${iconPath}' in '${path.relative(ewabConfig.workPath, markupPath)}', but was unable to find an icon at that path. Please remove any broken references to icons.`);
+					log("warning", `Found a reference to an icon "${iconFile}" in "${markupFile}", but was unable to find an icon at that path. Please remove any broken references to icons.`);
 				}
 			}
 		}
 
-		log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons with purpose "any" in '${path.relative(ewabConfig.workPath, markupPath)}'.${foundIcons.length > 0 ? " Adding them to the icons list." : ""}`);
+		log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons with purpose "any" in "${markupFile}".${foundIcons.length > 0 ? " Adding them to the icons list." : ""}`);
 
-		ewabConfig.icons.list.any.push(...foundIcons);
+		ewabConfig.icons.list.any.push(...foundIcons.map(iconFile => iconFile.appPath));
 
 	}
 
@@ -325,9 +317,10 @@ async function begin(){
 	for(const purpose of supportedIconPurposes) foundManifestIcons[purpose] = [];
 
 	if(!Array.isArray(ewabRuntime.manifest.icons)) ewabRuntime.manifest.icons = [];
+	const manifestFile = new AppFile({appPath: ewabConfig.manifestPath});
 	for(const icon of ewabRuntime.manifest.icons){
 		if(icon.src){
-			const iconPath = path.relative(ewabConfig.workPath, resolveURL(ewabConfig.workPath, path.join(ewabConfig.workPath, ewabConfig.manifestPath), icon.src));
+			const iconFile = resolveAppUrl(manifestFile, icon.src);
 
 			const foundPurposes = [];
 			if(typeof icon.purpose === "string"){
@@ -337,10 +330,10 @@ async function begin(){
 				foundPurposes.push("any");
 			}
 
-			if(fileExists(path.join(ewabConfig.workPath, iconPath))){
-				for(const purpose of foundPurposes) foundManifestIcons[purpose].push(iconPath);
+			if(await iconFile.exists()){
+				for(const purpose of foundPurposes) foundManifestIcons[purpose].push(iconFile);
 			}else{
-				log("warning", `Found a reference to an icon '${iconPath}' in the manifest, but was unable to find an icon at that path. Please remove any broken references to icons.`);
+				log("warning", `Found a reference to an icon "${iconFile}" in the manifest, but was unable to find an icon at that path. Please remove any broken references to icons.`);
 			}
 		}
 	}
@@ -348,7 +341,7 @@ async function begin(){
 		const count = foundManifestIcons[purpose].length;
 		log(`${count > 0 ? `Found ${count}` : "Did not find any"} references to icons with purpose "${purpose}" in manifest.${count > 0 ? " Adding them to the icons list." : ""}`);
 	
-		ewabConfig.icons.list[purpose].push(...foundManifestIcons[purpose]);
+		ewabConfig.icons.list[purpose].push(...foundManifestIcons[purpose].map(iconFile => iconFile.appPath));
 
 		//Remove duplicates
 		ewabConfig.icons.list[purpose] = [ ...new Set([ ...ewabConfig.icons.list[purpose] ]) ];
@@ -370,35 +363,31 @@ async function begin(){
 
 
 	log("Collecting script metadata");
-	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
+	for await (const { markupFile, markup } of getAllAppMarkupFiles()){
 
-		const html = new jsdom.JSDOM(await fs.readFile(markupPath));
-
-		for(const script of html.window.document.querySelectorAll("script[src]")){
-			const scriptPath = path.relative(ewabConfig.workPath, resolveURL(ewabConfig.workPath, markupPath, script.src));
-			if(!fileExists(path.join(ewabConfig.workPath, scriptPath))){
-				log("warning", `Found a reference to a script '${scriptPath}' in '${path.relative(ewabConfig.workPath, markupPath)}', but was unable to find a script at that path. Please remove any broken references to scripts.`);
+		for(const script of markup.window.document.querySelectorAll("script[src]")){
+			const scriptFile = resolveAppUrl(markupFile, script.src);
+			if(!(await scriptFile.exists())){
+				log("warning", `Found a reference to a script "${scriptFile}" in "${markupFile}", but was unable to find a script at that path. Please remove any broken references to scripts.`);
 				continue;
 			}
 
-			const fileConfig = config.generateForFile(scriptPath);
-
 			const fileException = {
-				glob: scriptPath,
+				glob: scriptFile.appPath,
 				files: {
 					module: undefined,
 				},
 			};
 
 			if(script.type === "module"){
-				if(fileConfig.files.module === undefined){
-					log(`Found that '${scriptPath}' is loaded as a module in '${path.relative(ewabConfig.workPath, markupPath)}'. Unless other proof is found, this will be properly minified as a module.`);
+				if(scriptFile.config.files.module === undefined){
+					log(`Found that "${scriptFile}" is loaded as a module in "${markupFile}". Unless other proof is found, this will be properly minified as a module.`);
 					fileException.files.module = true;
 					ewabConfig.fileExceptions.push(fileException);
 				}
 			}else{
-				if(fileConfig.files.module !== false){
-					log(`Found that '${scriptPath}' is loaded as a non-module in '${path.relative(ewabConfig.workPath, markupPath)}'. It will not be minified at top-level, to preserve possible sideffects.`);
+				if(scriptFile.config.files.module !== false){
+					log(`Found that "${scriptFile}" is loaded as a non-module in "${markupFile}". It will not be minified at top-level, to preserve possible sideffects.`);
 					fileException.files.module = false;
 					ewabConfig.fileExceptions.push(fileException);
 				}
@@ -415,7 +404,7 @@ async function begin(){
  */
 async function end(){
 
-	log(`Copying completed files from '${path.relative(ewabConfig.rootPath, ewabConfig.workPath)}' to '${path.join(ewabConfig.outputPath)}'`);
+	log(`Copying completed files from "${path.relative(ewabConfig.rootPath, ewabConfig.workPath)}" to "${path.normalize(ewabConfig.outputPath)}"`);
 
 	await fs.emptyDir(path.join(ewabConfig.rootPath, ewabConfig.outputPath));
 	await fs.copy(ewabConfig.workPath, path.join(ewabConfig.rootPath, ewabConfig.outputPath));
@@ -432,7 +421,7 @@ async function clean(){
 
 	log(`Removing temporary work folders`);
 
-	if(ewabConfig?.workPath) fs.remove(ewabConfig.workPath);
+	if(ewabConfig?.workPath) await fs.remove(ewabConfig.workPath);
 }
 
 /**
@@ -440,16 +429,17 @@ async function clean(){
  */
 async function writeManifest(){
 	log("Writing final manifest to project");
-	await fs.writeJson(path.join(ewabConfig.workPath, ewabConfig.manifestPath), ewabRuntime.manifest);
+	const manifestFile = new AppFile({appPath: ewabConfig.manifestPath});
+	manifestFile.write(ewabRuntime.manifest);
 }
 
 /**
  * Makes a list of all folders that could be input folders for EWAB.
  * NOTE: the returned results are match objects as defined by `matchInputFolderName()`.
  * 
- * @param	{string}	rootPath	- The absolute path to the folder where input folder candidates should be found.
+ * @param {string} rootPath - The absolute path to the folder where input folder candidates should be found.
  * 
- * @returns	{Array<object>}	- An array of match objects for each possible folder. The array is empty if no suitable folders were found.
+ * @returns	{Array<object>} - An array of match objects for each possible folder. The array is empty if no suitable folders were found.
  */
 export function findInputFolderCandidates(rootPath){
 
@@ -460,7 +450,7 @@ export function findInputFolderCandidates(rootPath){
 /**
  * Figures out what the final output folder should be called, especially by looking at the name of the input folder.
  * 
- * @param {string}	inputFolderName	- The name of the input folder.
+ * @param {string} inputFolderName - The name of the input folder.
  * 
  * @returns {string} - The output folder name to be used.
  */
@@ -502,9 +492,9 @@ export function decideOutputFolderName(inputFolderName){
  * - brand: The EWAB name that was used in the folder name (undefined if no EWAB name was used) (example: 'EWAB', 'easy-web-app-builder').
  * - delimiter: What delimiter was used between `brand` and `type` (undefined if there was no delimiter).
  * 
- * @param	{string}	name	- The name of the input folder.
+ * @param {string} name - The name of the input folder.
  * 
- * @returns	{object}	- The match object described above.
+ * @returns	{object} - The match object described above.
  */
 function matchInputFolderName(name = ""){
 

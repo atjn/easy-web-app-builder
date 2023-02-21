@@ -1,16 +1,13 @@
-/* global ewabConfig */
-
 /**
  * @file
  * These functions handle everything related to setting up and managing the config object.
  */
 
 import path from "node:path";
-import minimatch from "minimatch";
 import objectHash from "object-hash";
 import joiBase from "joi";
 
-import { fileExists, deepMerge, importAny } from "./tools.js";
+import { File, deepMerge, importAny } from "./tools.js";
 import { log } from "./log.js";
 
 /**
@@ -40,10 +37,8 @@ export const supportedIconPurposes = ["any", "maskable", "monochrome"];
 /**
  * Generates the main config object which determines how easy-web-app-builder should operate.
  * 
- * @param	{object}	callConfig	- The call config object (CLI options).
- * 
- * @returns	{object}				- The main config object.
- * 
+ * @param {object} callConfig - The call config object (CLI options).
+ * @returns {object} - The main config object.
  */
 async function generateMain(callConfig){
 
@@ -51,7 +46,7 @@ async function generateMain(callConfig){
 	try{
 		configFromCall = JSON.parse(callConfig.config);
 	}catch(error){
-		log("error", "Was unable to read the config object passed in the CLI, it seems to be invalid.");
+		log("error", "Was unable to read the config object passed in the CLI, it seems to be invalid.", error);
 	}
 
 	log.warmup(configFromCall.interface);
@@ -99,53 +94,22 @@ async function generateMain(callConfig){
 
 	mainConfig.hash = objectHash(mainConfig);
 
-	if(mainConfig.alias !== defaults.alias) log(`NOTE: The EWAB alias has been changed to '${mainConfig.alias}'. If this alias collides with other names in the project, it could cause weird behavior.`);
+	if(mainConfig.alias !== defaults.alias) log(`NOTE: The EWAB alias has been changed to "${mainConfig.alias}". If this alias collides with other names in the project, it could cause weird behavior.`);
 
 	return mainConfig;
 
 }
 
 /**
- * Generates a config object for a given local file, taking into account any `fileExceptions`.
- * 
- * @param	{string}	filePath	- Absolute path of the file to build a config for.
- * 
- * @returns	{object}				- A config object for the file.
- * 
- */
-function generateForFile(filePath){
-
-	const localFilePath = path.relative(ewabConfig.workPath, filePath);
-
-	let exceptionsConfig = {};
-
-	for(const exception of ewabConfig.fileExceptions){
-
-		if(minimatch(localFilePath, exception.glob)){
-
-			exceptionsConfig = deepMerge(exceptionsConfig, exception);
-			delete exceptionsConfig.glob;
-
-		}
-
-	}
-
-	return deepMerge(ewabConfig, exceptionsConfig);
-
-}
-
-/**
  * Tries to find an easy-web-app-builder config file in a given folder.
  * 
- * @param	{string}	folderPath		- Absolute path to folder.
- * @param	{string}	[configName]	- Specify a custom config file name (with/without extension and leading dot).
- * 
- * @returns	{object}					- An array of string rules.
- * 
+ * @param {string} folderPath - Absolute path to folder.
+ * @param {string} [configName] - Specify a custom config file name (with/without extension and leading dot).
+ * @returns {object} - An array of string rules.
  */
 export async function getRootFileConfig(folderPath, configName = defaults.configName){
 
-	log(`Trying to find config file '${configName}' in project root folder`);
+	log(`Trying to find config file "${configName}" in project root folder`);
 
 	configName = configName.startsWith(".") ? configName : `.${configName}`;
 
@@ -155,16 +119,18 @@ export async function getRootFileConfig(folderPath, configName = defaults.config
 		path.join(folderPath, configName),
 	]){
 
-		if(fileExists(filePath)){
+		const file = new File({absolutePath: filePath});
 
-			log(`Found a config file at '${path.relative(folderPath, filePath)}', attempting to read it`);
+		if(await file.exists()){
+
+			log(`Found a config file at "${path.relative(folderPath, filePath)}", attempting to read it`);
 
 			try{
 
-				return await importAny(filePath);
+				return await importAny(file);
 
 			}catch(error){
-				log("error", `Was unable to read the config file '${path.relative(folderPath, filePath)}', it seems to be invalid.`);
+				log("error", `Was unable to read the config file "${path.relative(folderPath, filePath)}", it seems to be invalid.`, error);
 			}
 
 		}
@@ -178,15 +144,13 @@ export async function getRootFileConfig(folderPath, configName = defaults.config
  * 
  * @param {object}	config	- The config object to validate.
  * @param {string}	source	- Text description of where the config object is coming from, used for logging.
- * 
  * @returns {Promise<object>} - The validated config object.
- * 
  */
 async function validateConfig(config, source){
 	try{
 		config = await configOptions.validateAsync(config, {abortEarly: false});
 	}catch(error){
-		log("error", `Found some unsupported options in the ${source}: ${error.details.map(detail => detail.message).join(", ")}.`);
+		log("error", `Found some unsupported options in the ${source}: ${error.details.map(detail => detail.message).join(", ")}.`, error);
 	}
 	log(`The ${source} seems to be valid`);
 	return config;
@@ -355,4 +319,4 @@ export const configOptions = joi.object({
 
 
 
-export default { generateMain, generateForFile };
+export default { generateMain };

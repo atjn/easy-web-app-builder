@@ -1,3 +1,4 @@
+/* global ewabConfig ewabRuntime */
 
 /**
  * @file
@@ -8,31 +9,36 @@ import path from "node:path";
 import fs from "fs-extra";
 import url from "node:url";
 
+import tinyGlob from "tiny-glob";
+import minimatch from "minimatch";
+import { hashElement } from "folder-hash";
+import jsdom from "jsdom";
 import lodash from "lodash";
 
-//import glob from "tiny-glob";
+import { log } from "./log.js";
 
 /**
  * Has the same behavior as `import`, but also allows importing JSON files.
- * This feature is coming to Node: https://nodejs.org/docs/latest/api/esm.html#esm_json_modules.
  * 
- * @param	{string}	filePath	- Absolute path to the file being imported.
- * 
- * @returns	{any}	- Whatever the file was exporting. If it was a JSON file, the JSON is returned as text.
+ * @param {File} file - The file being imported.
+ * @returns {any} - Whatever the file was exporting. If it was a JSON file, the JSON is parsed.
  * 
  */
-export async function importAny(filePath){
+export async function importAny(file){
+
+	if(fatalError(`import of ${file}`)) return {};
 
 	let data = {};
 
-	switch(getExtension(filePath)){
+	switch(file.extension){
 		case "js": {
-			const module = await import(filePath);
+			const module = await import(file.absolutePath);
 			data = module.default;
 			break;
 		}
 		case "json": {
-			data = await fs.readJson(filePath);
+			// TODO: Use the native feature when available: https://nodejs.org/docs/latest/api/esm.html#esm_json_modules.
+			data = await fs.readJson(file.absolutePath);
 			break;
 		}
 	}
@@ -47,31 +53,89 @@ export async function importAny(filePath){
 export const ewabSourcePath = path.join(url.fileURLToPath(import.meta.url), "../../");
 
 /**
- * Takes any URL format referenced from any file and turns it into an absolute path to the actual file in the filesystem.
- * This does not fully adhere to the URL spec, but it is good enough for the purposes of this package.
- * 
- * @param	{string}	appRootPath		- Absolute path to the folder that acts as the root domain for the app. 
- * @param	{string}	fileFolderPath	- Absolute path to the file that the URL is referenced in (or the folder the file is in).
- * @param	{string}	URL 			- The URL from the file.
- * 
- * @returns	{string | null}	- An absolute path to the file that the URL was referring to, or null if the URL could not be parsed.
+ * Generates a relative URL from one file to another.
+ * When the URL is inserted into the first file, browsers will be able to resolve the path to the other file from it.
+ *
+ * @param {AppFile} fromFile - The file that needs to point to another file.
+ * @param {AppFile} toFile - The file that needs to be pointed to.
+ * @returns {string} - The relative URL from the first file to the second file.
  */
-export function resolveURL(appRootPath = "", fileFolderPath = "", URL = ""){
+export function generateRelativeAppUrl(fromFile, toFile){
+	const relativePath = path.relative(path.join(fromFile.appPath, ".."), toFile.appPath);
+	const url = relativePath.split("/").map(segment => encodeURIComponent(segment)).join("/");
+	return url;
+}
 
-	const relativePath = URL.match(/^(?:https?:)?(?:\/\/)?(?:(?<=\/\/)[^/]+|[^/]+\.[^/]+(?=\/))?(?<path>.*)$/ui)?.groups?.path;
+/**
+ * Takes any URL format referenced in any app file and returns an AppFile for the referenced file.
+ * 
+ * @param {AppFile} appFile - AppFile for the file that the URL is referenced in.
+ * @param {string} url - The URL from the file.
+ * @param {boolean} resolveOutisdeAppRoot - Whether or not the urls can reference files outside of the app root folder.
+ * 
+ * @returns	{AppFile | null} - AppFile for the file that the URL was referring to, or null if the URL could not be parsed.
+ */
+export function resolveAppUrl(appFile, url, resolveOutisdeAppRoot = false){
 
-	if(fileExists(fileFolderPath)){
-		fileFolderPath = path.join(fileFolderPath, "..");
+	// TODO: Ensure that this follows the spec correctly. Maybe create a separate project for it.
+	// https://url.spec.whatwg.org/#urls
+	// https://wpt.fyi/results/url
+
+	const dirtyUrlPath = url.match(/^(?![^/.]*?\/\/)(?<path>.*)$/ui)?.groups?.path;
+	if(!dirtyUrlPath) return null;
+
+	const urlSegments = dirtyUrlPath.split("/");
+
+	const urlPathIsAbsolute = Boolean(urlSegments[0] === "" && urlSegments.length > 1);
+
+	let index = 0;
+	while(index < urlSegments.length){
+		if(urlSegments[index] === "."){
+			urlSegments.splice(index, 1);
+		}else{
+			index += 1;
+		}
 	}
 
-	if(!relativePath) return null;
+	index = 1;
+	while(index < urlSegments.length){
+		if(urlSegments[index] === ".." && urlSegments[index - 1] !== ".."){
+			urlSegments.splice(index - 1, 2);
+			index -= 1;
+		}else{
+			index += 1;
+		}
+	}
 
-	const absolutePath = path.join(
-		relativePath.startsWith("/") ? appRootPath : fileFolderPath,
-		relativePath,
-	);
+	index = 0;
+	while(index < urlSegments.length - 1){
+		if(urlSegments[index] === ""){
+			urlSegments.splice(index, 1);
+		}else{
+			index += 1;
+		}
+	}
 
-	return absolutePath;
+	try {
+		for(const [index, segment] of urlSegments.entries()){
+			urlSegments[index] = decodeURIComponent(segment);
+		}
+	}catch(error){
+		return null;
+	}
+
+	const tidyUrlPath = urlSegments.join("/");
+
+	const appPath = urlPathIsAbsolute
+		? path.normalize(tidyUrlPath)
+		: path.join(
+			path.join(appFile.appPath, ".."),
+			tidyUrlPath,
+		);
+
+	if(!resolveOutisdeAppRoot && appPath.startsWith("..")) return null;
+
+	return new AppFile({appPath});
 
 }
 
@@ -81,24 +145,11 @@ export function resolveURL(appRootPath = "", fileFolderPath = "", URL = ""){
 export const ewabPackage = fs.readJsonSync(path.join(ewabSourcePath, "package.json"));
 
 /**
- * Takes a file path/name and returns a standardised extension name with no leading dot and all lowercase letters.
- * 
- * @param	{string}	filePath	- Path of the file to get extension from.
- * 
- * @returns	{string}	- The file extension.
- */
-export function getExtension(filePath){
-	
-	return path.extname(filePath).substring(1).toLowerCase();
-
-}
-
-/**
  * Returns an array of all file names in a folder.
  * 
  * @param	{string}	folderPath	- Absolute path of the folder to scan.
  * 
- * @returns	{string[]}	- An array of all file names in the folder.
+ * @returns	{File[]}	- An array of all file names in the folder.
  */
 export function getFolderFiles(folderPath){
 	return fs.readdirSync(folderPath, {withFileTypes: true})
@@ -119,21 +170,14 @@ export function getSubfolders(folderPath){
 		.map(entry => entry.name);
 }
 
-/**.
- * Checks if a file exists at a certain path. (synhcronous)
- * 
- * @param	{string}	filePath	- Absolute path of the file to check.
- * 
- * @returns	{boolean}	- Wether the file exists or not.
- */
 /**
- *
- * @param filePath
+ * Checks if a file exists at a certain path. (synhcronous).
+ * 
+ * @param {string} filePath	- Absolute path of the file to check.
+ * @returns	{Promise<boolean>} - Wether the file exists or not.
  */
-export function fileExists(filePath){
-
-	return Boolean(fs.existsSync(filePath) && fs.lstatSync(filePath).isFile());
-
+export async function fileExists(filePath){
+	return Boolean(await fs.exists(filePath) && (await fs.lstat(filePath)).isFile());
 }
 
 /**
@@ -143,9 +187,9 @@ export function fileExists(filePath){
  * 
  * @returns	{boolean}	- Wether the folder exists or not.
  */
-export function folderExists(folderPath){
+export async function folderExists(folderPath){
 
-	return Boolean(fs.existsSync(folderPath) && fs.lstatSync(folderPath).isDirectory());
+	return Boolean(await fs.exists(folderPath) && (await fs.lstat(folderPath)).isDirectory());
 
 }
 
@@ -164,22 +208,377 @@ export function deepMerge(source, update){
 /**
  * Clone an object.
  * 
- * @param {object} source	- The object to clone.
+ * @param {object} source - The object to clone.
  * 
  * @returns {object} - The cloned object.
  */
 export function deepClone(source){
 	return lodash.cloneDeep(source);
+
+/**
+ * Represents a file in the filesystem.
+ */
+export class File{
+
+	constructor(entries = {}){
+		for(const key of Object.keys(entries)){
+			this[key] = entries[key];
+		}
+	}
+
+	/**
+	 * The absolute path to the file.
+	 *
+	 * @param {string} value - Value to set.
+	 */
+	set absolutePath(value){
+		this.#absolutePath = path.resolve(value);
+	}
+	get absolutePath(){
+		return this.#absolutePath;
+	}
+	#absolutePath = "";
+
+	/**
+	 * The path to the file, relative to the ewab root folder.
+	 * This is mostly useful for displaying the path in logs, since it doesn't include the absolute
+	 * path to the root folder, which clutters the log and could contain sensitive information.
+	 *
+	 * @param {string} value - Value to set.
+	 */
+	set rootPath(value){
+		this.absolutePath = path.join(ewabConfig?.rootPath ?? "", value);
+	}
+	get rootPath(){
+		return path.relative(ewabConfig?.rootPath ?? "", this.absolutePath);
+	}
+
+	/**
+	 * A standardised version of the file extension with no leading dot and all lowercase letters.
+	 * 
+	 * @returns	{string} - The file extension.
+	 */
+	get extension(){
+		return path.extname(this.absolutePath).substring(1).toLowerCase();
+	}
+
+	/**
+	 * Checks whether or not the file actually exists in the filesystem.
+	 *
+	 * @returns {Promise<boolean>} - Whether or not the file exists in the filesystem.
+	 */
+	async exists(){
+		return await fileExists(this.absolutePath);
+	}
+
+	/**
+	 * Reads the contents of the file.
+	 * Remember to call `exists` first to check if the file exists in the filesystem.
+	 *
+	 * @param {"string"|"json"} readAs - Whether to read the file as a string (default) or parse it as JSON.
+	 * @returns {Promise<string|object>} - The contents of the file.
+	 */
+	async read(readAs = "string"){
+		
+		try {
+			switch(readAs){
+				case "string": {
+					return await fs.readFile(this.absolutePath, "utf8");
+				}
+				case "json": {
+					return await fs.readJson(this.absolutePath);
+				}
+			}
+		}catch(error){
+			log("error", `Encountered an error while reading file "${this}"`, error);
+			return emptyVersionOf(readAs);
+		}
+
+		/**
+		 * If there is an issue with reading the file, call this to return a safe empty value.
+		 * 
+		 * @returns {""|{}} - The empty version of the file type.
+		 */
+		function emptyVersionOf(){
+			switch(readAs){
+				case "string": {
+					return "";
+				}
+				case "json": {
+					return {};
+				}
+			}
+		}
+
+		throw new TypeError(`Does not support reading file as type "${readAs}"`);
+	}
+
+	/**
+	 * Overwrites the file with the given content.
+	 * If the content is an object, it is stringified as JSON.
+	 *
+	 * @param {string | object} content - The content to write to the file.
+	 * @returns {Promise<void>}
+	 */
+	async write(content){
+
+		try{
+			if(typeof content === "string"){
+				return await fs.writeFile(this.absolutePath, content);
+			}else{
+				return await fs.writeJson(this.absolutePath, content);
+			}
+		}catch(error){
+			log("error", `Encountered an error while writing file "${this}"`, error);
+		}
+	}
+
+	/**
+	 * Copies the contents of this file to another file.
+	 *
+	 * @param {File} file - The file to copy to.
+	 * @returns {Promise<void>}
+	 */
+	async copyTo(file){
+		try{
+			return await fs.copy(this.absolutePath, file.absolutePath);
+		}catch(error){
+			log("error", `Encountered an error while copying file "${this}" to "${file}"`, error);
+		}
+	}
+
+	/**
+	 * Deletes the file from the filesystem.
+	 *
+	 * @returns {Promise<void>}
+	 */
+	async delete(){
+		return await fs.remove(this.absolutePath);
+	}
+
+	/**
+	 * Computes a hash for the file.
+	 * Be aware that the hash is computed from the current file, which might be different from the original input file.
+	 *
+	 * @returns {Promise<string>} - The hash as a hex string.
+	 */
+	async getHash(){
+		return (await hashElement(this.absolutePath, { "encoding": "hex" })).hash;
+	}
+
+	toString(){
+		return this.rootPath;
+	}
+
 }
 
-/*
-export function getAllItems(includeDirectories = false){
+/**
+ * Represents a file in the app.
+ */
+export class AppFile extends File{
 
-	return await glob("**\/*", {cwd: ewabConfig.workPath, absolute: true}).filter(itemPath => {
+	constructor(entries = {}){
+		super();
+		for(const key of Object.keys(entries)){
+			this[key] = entries[key];
+		}
+	}
 
-		return includeDirectories ? true : fileExists(itemPath);
-	
-	});
+	/**
+	 * The canonical path to the file, relative to the app root.
+	 *
+	 * @param {string} value - Value to set.
+	 */
+	set appPath(value){
+		this.#appPath = path.normalize(value);
+	}
+	get appPath(){
+		return this.#appPath;	
+	}
+	#appPath = "";
+
+	/**
+	 * The path to the file in the input folder, relative to the ewab root folder.
+	 * This is mostly useful for displaying the path in logs, since it doesn't include the absolute
+	 * path to the root folder, which clutters the log and could contain sensitive information.
+	 *
+	 * @param {string} value - Value to set.
+	 */
+	set safeInputPath(value){
+		this.appPath = path.relative(ewabConfig.inputPath, value);
+	}
+	get safeInputPath(){
+		return path.join(ewabConfig.inputPath, this.appPath);
+	}
+
+	/**
+	 * The absolute path to the file in the input folder.
+	 *
+	 * @param {string} value - Value to set.
+	 */
+	set inputPath(value){
+		if(!value.startsWith(ewabConfig.rootPath)){
+			throw new ReferenceError(`The path "${value}" doesn't start with the root folder ("${ewabConfig.rootPath}").`);
+		}
+		this.rootPath = path.relative(ewabConfig.rootPath, value);
+	}
+	get inputPath(){
+		return path.join(ewabConfig.rootPath, this.safeInputPath);
+	}
+
+	/**
+	 * The path to the file in the output folder, relative to the ewab root folder.
+	 * This is mostly useful for displaying the path in logs, since it doesn't include the absolute
+	 * path to the root folder, which clutters the log and could contain sensitive information.
+	 *
+	 * @param {string} value - Value to set.
+	 */
+	set safeOutputPath(value){
+		if(!value.startsWith(ewabConfig.outputPath)){
+			throw new ReferenceError(`The path "${value}" doesn't start with the output folder ("${ewabConfig.outputPath}").`);
+		}
+		this.appPath = path.relative(ewabConfig.outputPath, value);
+	}
+	get safeOutputPath(){
+		return path.join(ewabConfig.outputPath, this.appPath);
+	}
+
+	/**
+	 * The absolute path to the file in the output folder.
+	 *
+	 * @param {string} value - Value to set.
+	 */
+	set outputPath(value){
+		if(!value.startsWith(ewabConfig.rootPath)){
+			throw new ReferenceError(`The path "${value}" doesn't start with the root folder ("${ewabConfig.rootPath}").`);
+		}
+		this.safeOutputPath = path.relative(ewabConfig.rootPath, value);
+	}
+	get outputPath(){
+		return path.join(ewabConfig.rootPath, this.safeOutputPath);
+	}
+
+	/**
+	 * The absolute path to the file in the work folder.
+	 *
+	 * @param {string} value - Value to set.
+	 */
+	set workPath(value){
+		if(!value.startsWith(ewabConfig.workPath)){
+			throw new ReferenceError(`The path "${value}" doesn't start with the work folder ("${ewabConfig.workPath}").`);
+		}
+		this.appPath = path.relative(ewabConfig.workPath, value);
+	}
+	get workPath(){
+		return path.join(ewabConfig.workPath, this.appPath);
+	}
+
+	/**
+	 * The absolute path to the file in the work folder.
+	 * This is only for compatibility with the File class, try to avoid using it.
+	 *
+	 * @param {string} value - Value to set.
+	 */
+	set absolutePath(value){
+		this.workPath = value;
+	}
+	get absolutePath(){
+		return this.workPath;
+	}
+
+	/**
+	 * Generates and saves the `cacheEntry` based on the current file contents. 
+	 *
+	 * @returns {Promise<void>}
+	 */
+	async setCacheEntry(){
+		const fileHash = await this.getHash();
+
+		this.cacheEntry = new File({ absolutePath: path.join(ewabConfig.cachePath, "items", `${fileHash}.${this.extension}`) });
+	}
+
+	/**
+	 * A File pointing to the cached finished version of this app file.
+	 * If this file exists, there is no reason to reprocess the original file.
+	 */
+	cacheEntry;
+
+	/**
+	 * Returns a File for the sourcemap. This File has a few extra properties to aid in linking the sourcemap.
+	 *
+	 * @returns {AppFile} - The file for the sourcemap.
+	 */
+	get sourceMap(){
+		const sourceMap = new AppFile({absolutePath: `${this.absolutePath}.map`});
+
+		if(this.cacheEntry) sourceMap.cacheEntry = new File({absolutePath: `${this.cacheEntry.absolutePath}.map`});
+
+		sourceMap.mapToFilePath = generateRelativeAppUrl(sourceMap, this);
+		sourceMap.fileToMapPath = generateRelativeAppUrl(this, sourceMap);
+
+		return sourceMap;
+	}
+
+	/**
+	 * The config for the app file, taking into account any `fileExceptions`.
+	 * TODO: Implement caching for this, it is causing ridiculous amounts of CPU and read usage.
+	 *
+	 * @returns	{object} - The config for the app file.
+	 */
+	get config(){
+		let exceptionsConfig = {};
+		for(const exception of ewabConfig.fileExceptions){
+			if(minimatch(this.appPath, exception.glob)){
+				exceptionsConfig = deepMerge(exceptionsConfig, exception);
+				delete exceptionsConfig.glob;
+			}
+		}
+		return deepMerge(ewabConfig, exceptionsConfig);
+	}
+
+	toString(){
+		return this.safeInputPath;
+	}
 
 }
-*/
+
+/**
+ * Finds any file in the working directory that satisfies the glob pattern.
+ *
+ * @param {string} query - The glob pattern to use.
+ * @yields {File} - The path to the file.
+ */
+export async function *glob(query){
+	const paths = await tinyGlob(query, {cwd: ewabConfig.rootPath, absolute: true, filesOnly: true});
+	for(const path of paths){
+		yield new File({absolutePath: path});
+	}
+}
+
+/**
+ * Finds any file in the app that satisfies the glob pattern.
+ *
+ * @param {string} query - The glob pattern to use.
+ * @yields {AppFile} - The path to the file.
+ */
+export async function *globApp(query){
+	const paths = await tinyGlob(query, {cwd: ewabConfig.workPath, absolute: true, filesOnly: true});
+	for(const path of paths){
+		yield new AppFile({workPath: path});
+	}
+}
+
+/**
+ * Finds all markup files in the app.
+ *
+ * @yields {object} - The markup as an AppFile and a JSDOM parsed object.
+ */
+export async function *getAllAppMarkupFiles(){
+	for await (const markupFile of globApp("**/*.{html,htm}")){
+		yield {
+			markupFile,
+			markup: new jsdom.JSDOM(await markupFile.read()),
+		};
+	}
+}
+

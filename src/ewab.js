@@ -17,7 +17,7 @@ import serviceworker from "./serviceworker.js";
 /**
  * Contains some shared objects and defaults that are used across this package.
  */
-export const ewabRuntime = {
+const ewabRuntime = {
 	sourcePath: ewabSourcePath,
 	minifiedItemHashes: [],
 	imagesMeta: new ImagesMeta(),
@@ -28,7 +28,7 @@ export const ewabRuntime = {
  * This function is called when EWAB starts.
  * It initiates global objects and controls the overall process.
  * 
- * @param	{object}	callConfig	- 
+ * @param {object} callConfig	- 
  */
 export default async function (callConfig = {}){
 

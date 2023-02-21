@@ -14,6 +14,9 @@ This is an overview of the entire configuration file.
   //if a cache should be used to speed up consecutive runs
   useCache: Boolean: true
   
+  //if EWAB should ignore runtime errors
+  ignoreErrors: Boolean: false
+  
   //path to the input folder
   inputPath: String
   

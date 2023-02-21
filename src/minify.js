@@ -1,4 +1,4 @@
-/* global ewabConfig */
+/* global ewabConfig ewabRuntime */
 
 /**
  * @file
@@ -8,21 +8,16 @@
 
 import path from "node:path";
 import fs from "fs-extra";
-import { hashElement as folderHash } from "folder-hash";
 import { log, bar } from "./log.js";
-import { fileExists, getExtension, resolveURL } from "./tools.js";
-import config, { supportedImageExtensions } from "./config.js";
-
-import jsdom from "jsdom";
-
-
+import { File, resolveAppUrl, globApp, fatalError } from "./tools.js";
+import { supportedImageExtensions } from "./config.js";
 
 import newVips from "wasm-vips";
 const vips = await newVips({
 
 	// Necessary per Feb 2023 in order to enable SVG support
 	// TODO: Should not be necessary in a future stable version
-	dynamicLibraries: ['vips-jxl.wasm', 'vips-heif.wasm', 'vips-resvg.wasm'],
+	dynamicLibraries: ["vips-jxl.wasm", "vips-heif.wasm", "vips-resvg.wasm"],
 
 	// Necessary per 2022 to ensure that wasm-vips doesn't just print randomly to the console
 	// TODO: In a future stable version, find a better solution to this
@@ -41,27 +36,26 @@ const vips = await newVips({
 
 import os from "node:os";
 
-
-import glob from "tiny-glob";
-
 import { minify as htmlMinifier } from "html-minifier-terser";
 import { minify as terser } from "terser";
 import CleanCSS from "clean-css";
 import { optimize as svgo } from "svgo";
 
 import asyncPool from "tiny-async-pool";
-import { ewabRuntime } from "./ewab.js";
+import { getAllAppMarkupFiles, AppFile } from "./tools.js";
 
 export default minify;
 
 
 
 class ImageEncoding{
+
 	constructor(entries = {}){
 		for(const key of Object.keys(entries)){
 			this[key] = entries[key];
 		}
 	}
+
 	mimeType;
 	extension;
 	alternateExtensions = [];
@@ -278,13 +272,13 @@ const imageEncodings = new ImageEncodings();
 /**
  * Minifies an aspect of the webapp. This can range from compressing images to deleting development-only files.
  * 
- * @param {"remove"|"images"|"files"}	type	- What type of minification to run.
+ * @param {"remove"|"images"|"files"} processType - What type of minification to run.
  */
-async function minify(type){
+async function minify(processType){
 
 	let processName = {};
 
-	switch(type){
+	switch(processType){
 		case "remove":
 			processName = {
 				action: {
@@ -328,30 +322,28 @@ async function minify(type){
 	const itemProcessingQueue = [];
 	let completedItemProcesses = 0;
 
-	for(const itemPath of await glob("**/*", {cwd: ewabConfig.workPath, absolute: true})){
+	for await (const appFile of globApp("**/*")){
 
-		if(["files", "images"].includes(type) && !fileExists(itemPath)) continue;
-
-		const extension = getExtension(itemPath);
+		if(["files", "images"].includes(processType) && !(await appFile.exists())) continue;
 
 		if(
-			(type === "files" && !["html", "css", "js", "json", "svg"].includes(extension)) ||
-			(type === "images" && !supportedImageExtensions.includes(extension) && extension !== "svg")
+			(processType === "files" && !["html", "css", "js", "json", "svg"].includes(appFile.extension)) ||
+			(processType === "images" && !supportedImageExtensions.includes(appFile.extension) && appFile.extension !== "svg")
 		){
 			continue;
 		}
 
-		const fileConfig = config.generateForFile(itemPath);
+		const fileConfig = appFile.config;
 
 		if(
-			(type === "remove" && fileConfig.files.remove !== true) ||
-			(type === "files" && fileConfig.files.minify !== true) ||
-			(type === "images" && fileConfig.images.compress.enable !== true && fileConfig.images.convert.enable !== true)
+			(processType === "remove" && fileConfig.files.remove !== true) ||
+			(processType === "files" && fileConfig.files.minify !== true) ||
+			(processType === "images" && fileConfig.images.compress.enable !== true && fileConfig.images.convert.enable !== true)
 		){
 			continue;
 		}
 
-		itemProcessingQueue.push({path: itemPath, extension, type, fileConfig});
+		itemProcessingQueue.push({processType, appFile});
 
 	}
 
@@ -380,7 +372,7 @@ async function minify(type){
 		bar.end(`${processName.action.past} ${itemProcessingQueue.length} ${itemProcessingQueue.length === 1 ? processName.item.singular : processName.item.plural}`);
 	}
 
-	if(type === "images" && ewabConfig.images.updateReferences){
+	if(processType === "images" && ewabConfig.images.updateReferences){
 
 		await updateImageReferences();
 
@@ -391,22 +383,23 @@ async function minify(type){
 /**
  * Processes a single file for minification.
  * 
- * @param {*}	item	- A custom object containing information about the item to be processed. 
+ * @param {object} item - A custom object containing information about the item to be processed. 
+ * @param {string} item.processType - What type of minification to run.
+ * @param {AppFile} item.appFile - The file to process.
  */
-async function processItem(item){
+async function processItem({processType, appFile}){
 
-	const itemRelativePath = path.relative(ewabConfig.workPath, item.path);
 
 	try{
 
-		const originalHash = (await folderHash(item.path, { "encoding": "hex" })).hash;
+		const originalHash = await appFile.getHash();
 
-		switch(item.type){
+		switch(processType){
 
 			case "remove": {
 
-				log(`Removing '${itemRelativePath}'`);
-				await fs.remove(item.path);
+				log(`Removing "${appFile}"`);
+				await appFile.delete();
 
 				return;
 
@@ -414,26 +407,20 @@ async function processItem(item){
 
 			case "files": {
 
-				const fileMapPath = path.join(ewabConfig.workPath, ewabConfig.alias, "sourceMaps", `${originalHash}.${item.extension}.map`);
-				const fileMapRelativePath = path.relative(path.join(item.path, ".."), fileMapPath);
-				const itemPathRelativeToFileMap = path.join(path.relative(path.join(fileMapPath, ".."), item.path));
-				const itemFolderPathRelativeToFileMap = path.join(itemPathRelativeToFileMap, "..");
+				await appFile.setCacheEntry();
 
-				const cachedFilePath = path.join(ewabConfig.cachePath, "items", `${originalHash}.${item.extension}`);
-				const cachedFileMapPath = `${cachedFilePath}.map`;
-
-				if(fileExists(cachedFilePath)){
-					log(`Copying minified version of '${itemRelativePath}' from cache`);
+				if(await appFile.cacheEntry.exists()){
+					log(`Copying minified version of "${appFile}" from cache`);
 				}else{
 
-					switch(item.extension){
+					switch(appFile.extension){
 						case "html":
 						case "htm": {
 
-							log(`Minifying '${itemRelativePath}' with html-minifier-terser`);
+							log(`Minifying "${appFile}" with html-minifier-terser`);
 
 							const minifiedHTML = await htmlMinifier(
-								(await fs.readFile(item.path, "utf8")),
+								(await appFile.read()),
 								{
 									collapseBooleanAttributes: true,
 									collapseWhitespace: true,
@@ -451,22 +438,19 @@ async function processItem(item){
 									sortAttributes: true,
 									sortClassName: true,
 									useShortDoctype: true,
-									...item.fileConfig.files.directOptions.html,
+									...appFile.config.files.directOptions.html,
 								},
 							);
 							
-							await fs.writeFile(
-								cachedFilePath,
-								minifiedHTML,
-							);
+							await appFile.cacheEntry.write(minifiedHTML);
 
 							break;
 						}
 						case "css": {
 
-							const addSourceMap = item.fileConfig.files.addSourceMaps;
+							const addSourceMap = appFile.config.files.addSourceMaps;
 
-							log(`Minifying '${itemRelativePath}' with clean-css${addSourceMap ? ", and adding a sourcemap" : ""}`);
+							log(`Minifying "${appFile}" with clean-css${addSourceMap ? ", and adding a sourcemap" : ""}`);
 
 							const minifiedCSS = await new CleanCSS(
 								{
@@ -483,26 +467,20 @@ async function processItem(item){
 											removeDuplicateRules: true,
 										},
 									},
-									...item.fileConfig.files.directOptions.css,
+									...appFile.config.files.directOptions.css,
 									returnPromise: true,
 									sourceMap: addSourceMap,
 									sourceMapInlineSources: true,
 								},
-							).minify(await fs.readFile(item.path));
+							).minify(await appFile.read());
 
-							await fs.writeFile(
-								cachedFilePath,
-								`${minifiedCSS.styles}\n/*# sourceMappingURL=${fileMapRelativePath} */`,
-							);
+							await appFile.cacheEntry.write(`${minifiedCSS.styles}${addSourceMap ? `\n/*# sourceMappingURL=${appFile.sourceMap.fileToMapPath} */` : ""}`);
 
 							const sourceMap = JSON.parse(minifiedCSS.sourceMap.toString());
-							sourceMap.sources = [ itemPathRelativeToFileMap ];
+							sourceMap.sources = [ appFile.sourceMap.mapToFilePath ];
 
-							if(item.fileConfig.files.addSourceMaps){
-								await fs.writeFile(
-									cachedFileMapPath,
-									JSON.stringify(sourceMap),
-								);
+							if(appFile.config.files.addSourceMaps){
+								await appFile.sourceMap.cacheEntry.write(sourceMap);
 							}
 
 							break;
@@ -511,59 +489,47 @@ async function processItem(item){
 						case "mjs":
 						case "cjs": {
 
-							const addSourceMap = item.fileConfig.files.addSourceMaps;
-							const isModule = Boolean(item.fileConfig.files.module ?? item.extension === "mjs");
+							const addSourceMap = appFile.config.files.addSourceMaps;
+							const isModule = Boolean(appFile.extension === "mjs" || appFile.config.files.module);
 
-							log(`Minifying '${itemRelativePath}' with terser as a ${isModule ? "module" : "non-module"}${addSourceMap ? ", and adding a sourcemap" : ""}`);
+							log(`Minifying "${appFile}" with terser as a ${isModule ? "module" : "non-module"}${addSourceMap ? ", and adding a sourcemap" : ""}`);
 
-							const minifiedJS = await terser(
-								{[path.basename(item.path)]: (await fs.readFile(item.path, "utf8"))},
+							const minifiedScript = await terser(
+								{ [appFile.appPath]: await appFile.read() },
 								{
 									ecma: 2022,
 									module: isModule,
-									...item.fileConfig.files.directOptions.js,
-									sourceMap: item.fileConfig.files.addSourceMaps ? {url: fileMapRelativePath, includeSources: true, root: itemFolderPathRelativeToFileMap} : false,
+									...appFile.config.files.directOptions.js,
+									sourceMap: appFile.config.files.addSourceMaps ? {includeSources: true, url: appFile.sourceMap.fileToMapPath, root: path.join(appFile.appPath, "..")} : false,
 								},
 							);
 
-							await fs.writeFile(
-								cachedFilePath,
-								minifiedJS.code,
-							);
+							await appFile.cacheEntry.write(minifiedScript.code);
 
-							if(item.fileConfig.files.addSourceMaps){
-								await fs.writeFile(
-									cachedFileMapPath,
-									minifiedJS.map,
-								);
+							if(appFile.config.files.addSourceMaps){
+								appFile.sourceMap.cacheEntry.write(minifiedScript.map);
 							}
 
 							break;
 						}
 						case "json": {
 
-							log(`Minifying '${itemRelativePath}' with V8 JSON parser`);
+							log(`Minifying "${appFile}" with V8 JSON parser`);
 							
-							await fs.writeJson(
-								cachedFilePath,
-								(await fs.readJson(item.path)),
-							);
+							await appFile.cacheEntry.write(await appFile.read("json"));
 
 							break;
 						}
 						case "svg": {
 
-							log(`Minifying '${itemRelativePath}' with SVGO`);
+							log(`Minifying "${appFile}" with SVGO`);
 
-							const minifiedSVG = svgo(
-								(await fs.readFile(item.path)),
-								item.fileConfig.files.directOptions.svg,
+							const minifiedSvg = svgo(
+								await appFile.read(),
+								appFile.config.files.directOptions.svg,
 							);
 							
-							await fs.writeFile(
-								cachedFilePath,
-								minifiedSVG.data,
-							);
+							await appFile.cacheEntry.write(minifiedSvg.data);
 
 							break;
 						}
@@ -571,10 +537,10 @@ async function processItem(item){
 
 				}
 
-				await fs.copy(cachedFilePath, item.path);
+				await appFile.cacheEntry.copyTo(appFile);
 
-				if(item.fileConfig.files.addSourceMaps && fileExists(cachedFileMapPath)){
-					await fs.copy(cachedFileMapPath, fileMapPath);
+				if(appFile.config.files.addSourceMaps && await appFile.sourceMap.cacheEntry.exists()){
+					await appFile.sourceMap.cacheEntry.copyTo(appFile.sourceMap);
 				}
 
 				return;
@@ -583,33 +549,33 @@ async function processItem(item){
 
 			case "images": {
 
-				log(`Compressing '${itemRelativePath}'..`);
+				log(`Compressing "${appFile}"..`);
 				const reports = [];
 
-				const originalImage = vips.Image.newFromFile(item.path);
+				const originalImage = vips.Image.newFromFile(appFile.workPath);
 
 				const originalSize = {
 					width: originalImage.width,
 					height: originalImage.height,
 				};
 
-				if(item.fileConfig.images.convert.enable) item.fileConfig.images.convert = processConvertSettings(item.fileConfig.images.convert, originalSize);
+				if(appFile.config.images.convert.enable) appFile.config.images.convert = processConvertSettings(appFile.config.images.convert, originalSize);
 
-				const targetExtensions = [ ...new Set([ ...item.fileConfig.images.convert.targetExtensions, item.fileConfig.images.convert.targetExtension ]) ];
+				const targetExtensions = [ ...new Set([ ...appFile.config.images.convert.targetExtensions, appFile.config.images.convert.targetExtension ]) ];
 
 				const newImageMeta = ewabRuntime.imagesMeta.new({
-					path: itemRelativePath,
+					path: appFile.appPath,
 					hash: originalHash,
 					width: originalSize.width,
 					height: originalSize.height,
-					fileConfig: item.fileConfig,
+					fileConfig: appFile.config,
 				});
 
-				for(const sizeConstraint of item.fileConfig.images.convert.enable ? item.fileConfig.images.convert.sizes : [ originalSize.width ]){
+				for(const sizeConstraint of appFile.config.images.convert.enable ? appFile.config.images.convert.sizes : [ originalSize.width ]){
 
 					try{
 
-						const isSvg = Boolean(getExtension(item.path) === "svg");
+						const isSvg = Boolean(appFile.extension === "svg");
 
 						const fittedImageSize = fitImageSizeToConstraints(originalSize, sizeConstraint, isSvg);
 
@@ -617,7 +583,8 @@ async function processItem(item){
 
 						let integrity = true;
 						testIntegrity: for(const targetExtension of targetExtensions){
-							if(!fileExists(`${cachedImagePath}.${targetExtension}`)){
+							const image = new File({ absolutePath: `${cachedImagePath}.${targetExtension}` });
+							if(!(await image.exists())){
 								integrity = false;
 								break testIntegrity;
 							}
@@ -627,19 +594,19 @@ async function processItem(item){
 						}else{
 
 							const image = isSvg
-								?	vips.Image.svgload(item.path, {scale: fittedImageSize.width / originalImage.width})
+								?	vips.Image.svgload(appFile.workPath, {scale: fittedImageSize.width / originalImage.width})
 								:	originalImage.resize(fittedImageSize.width / originalImage.width);
 
 							for(const targetExtension of targetExtensions){
 
 								const targetEncoding = imageEncodings.match(targetExtension);
 
-								if(!targetEncoding) throw new Error(`Does not support compressing to image with extension "${targetExtension}"`);
+								if(!targetEncoding) throw new TypeError(`Does not support compressing to image with extension "${targetExtension}"`);
 
 								// Save the image to cache
 								const encodingOptions = {
-									...targetEncoding.getEncodingOption(item.fileConfig.images.compress.subject, item.fileConfig.images.compress.quality),
-									...item.fileConfig.images.encoderOptions[targetEncoding.encodingEngine],
+									...targetEncoding.getEncodingOption(appFile.config.images.compress.subject, appFile.config.images.compress.quality),
+									...appFile.config.images.encoderOptions[targetEncoding.encodingEngine],
 								};
 								image[targetEncoding.vipsSaveFunction](`${cachedImagePath}.${targetEncoding.extension}`, encodingOptions);
 
@@ -655,7 +622,7 @@ async function processItem(item){
 						}
 						
 						await Promise.all(targetExtensions.map(targetExtension => {
-							const newImagePath = transformImagePath(item.path, fittedImageSize.width, {extension: targetExtension});
+							const newImagePath = transformImagePath(appFile.workPath, fittedImageSize.width, {extension: targetExtension});
 							const targetEncoding = imageEncodings.match(targetExtension);
 							newImageMeta.newVersion({
 								path: newImagePath,
@@ -670,16 +637,16 @@ async function processItem(item){
 					
 					}catch(error){
 
-						log("warning", `Unable to compress '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
+						log("warning", `Unable to compress "${appFile}".${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
 
 						log(`Error: ${error}`);
 					}
 					
 				}
 
-				if(!item.fileConfig.images.keepOriginal) await fs.remove(item.path);
+				if(!appFile.config.images.keepOriginal) await appFile.delete();
 
-				log(`Completed compression of ${itemRelativePath}:`);
+				log(`Completed compression of ${appFile}:`);
 				for(const report of reports) log(`  ${report}`);
 
 				return;
@@ -693,9 +660,9 @@ async function processItem(item){
 	}catch(error){
 
 		if(String(error).includes("has an unsupported format")){
-			log("warning", `Was not able to read '${itemRelativePath}', it will not be compressed.`);
+			log("warning", `Was not able to read "${appFile}", it will not be compressed.`);
 		}else{
-			log("warning", `Unable to compress '${itemRelativePath}'.${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
+			log("warning", `Unable to compress "${appFile}".${ewabConfig.interface === "debug" ? "" : " Enable the debug interface to see more info."}`);
 		}
 		log(`Error: ${error}`);
 
@@ -709,9 +676,9 @@ async function processItem(item){
  */
 async function updateImageReferences(){
 
-	for(const sheetPath of await glob("**/*.css", {cwd: ewabConfig.workPath, absolute: true})){
+	for await (const sheetFile of globApp("**/*.css")){
 
-		let css = await fs.readFile(sheetPath, "utf8");
+		let css = await sheetFile.read();
 
 		// Find any background properties using simple url(), and convert them to image-set() if it is necessary 
 		let match = true;
@@ -722,9 +689,8 @@ async function updateImageReferences(){
 				break;
 			}
 
-			const imagePath = resolveURL(
-				ewabConfig.workPath,
-				sheetPath,
+			const imagePath = resolveAppUrl(
+				sheetFile,
 				imageSet.groups.url,
 			);
 
@@ -732,12 +698,12 @@ async function updateImageReferences(){
 			const fileConfig = imageMeta?.fileConfig;
 
 			if(!imageMeta){
-				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: URL ${imageSet.groups.url} at index ${imageSet.index} does not correlate with a minified image, aborting upgrade to an image-set.`);
+				log(`In ${sheetFile}: URL ${imageSet.groups.url} at index ${imageSet.index} does not correlate with a minified image, aborting upgrade to an image-set.`);
 			}if(!fileConfig.images.convert.enable){
-				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: URL ${imageSet.groups.url} at index ${imageSet.index} does not have a modifed URL, so no reason to upgrade to image-set.`);
+				log(`In ${sheetFile}: URL ${imageSet.groups.url} at index ${imageSet.index} does not have a modifed URL, so no reason to upgrade to image-set.`);
 			}else{
 
-				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: upgrading url to image-set for URL ${imageSet.groups.url} at index ${imageSet.index}.`);
+				log(`In ${sheetFile}: upgrading url to image-set for URL ${imageSet.groups.url} at index ${imageSet.index}.`);
 
 				css = css.replace(imageSet.groups.match, `${imageSet.groups.pre}image-set("${imageSet.groups.url}")${imageSet.groups.pro}`);
 			}
@@ -752,9 +718,8 @@ async function updateImageReferences(){
 				break;
 			}
 
-			const imagePath = resolveURL(
-				ewabConfig.workPath,
-				sheetPath,
+			const imagePath = resolveAppUrl(
+				sheetFile,
 				imageSet.groups.url,
 			);
 
@@ -762,12 +727,12 @@ async function updateImageReferences(){
 			const fileConfig = imageMeta?.fileConfig;
 
 			if(!imageMeta){
-				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: URL ${imageSet.groups.url} at index ${imageSet.index} does not correlate with a minified image, aborting upgrade of the image-set.`);
+				log(`In ${sheetFile}: URL ${imageSet.groups.url} at index ${imageSet.index} does not correlate with a minified image, aborting upgrade of the image-set.`);
 			}if(!fileConfig.images.convert.enable){
-				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: URL ${imageSet.groups.url} at index ${imageSet.index} does not have a modifed URL, so no reason to upgrade image-set.`);
+				log(`In ${sheetFile}: URL ${imageSet.groups.url} at index ${imageSet.index} does not have a modifed URL, so no reason to upgrade image-set.`);
 			}else{
 
-				log(`In ${path.relative(ewabConfig.rootPath, sheetPath)}: upgrading image-set for URL ${imageSet.groups.url} at index ${imageSet.index}.`);
+				log(`In ${sheetFile}: upgrading image-set for URL ${imageSet.groups.url} at index ${imageSet.index}.`);
 
 				const fallBackImage = imageMeta.matchVersion({
 					constraint: fileConfig.images.convert.size,
@@ -825,27 +790,23 @@ async function updateImageReferences(){
 
 		}
 
-		await fs.writeFile(sheetPath, css);
+		await sheetFile.write(css);
 
 
 	}
 	
-	for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
+	for await (const { markupFile, markup } of getAllAppMarkupFiles()){
 
-		const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
+		if(markup?.window?.document){
 
-		if(html?.window?.document){
-
-			for(const img of html.window.document.querySelectorAll("picture > img")){
+			for(const img of markup.window.document.querySelectorAll("picture > img")){
 					
-				const srcPath = resolveURL(
-					ewabConfig.workPath,
-					markupPath,
+				const srcPath = resolveAppUrl(
+					markupFile,
 					img.src ?? "",
 				);
-				const srcsetPath = resolveURL(
-					ewabConfig.workPath,
-					markupPath,
+				const srcsetPath = resolveAppUrl(
+					markupFile,
 					img.srcset ?? "",
 				);
 
@@ -874,7 +835,7 @@ async function updateImageReferences(){
 						if(targetExtension === fileConfig.images.convert.targetExtensions[fileConfig.images.convert.targetExtensions.length - 1]){
 							img[srcType] = newURL;
 						}else{
-							const source = html.window.document.createElement("source");
+							const source = markup.window.document.createElement("source");
 							source[srcType] = newURL;
 							source.type = mimeType;
 
@@ -887,13 +848,12 @@ async function updateImageReferences(){
 
 			}
 
-			for(const img of html.window.document.querySelectorAll("img, picture > source")){
+			for(const img of markup.window.document.querySelectorAll("img, picture > source")){
 
 				if((/^\s*[^,\s]+$/u).test(img.srcset)){
 
-					const imagePath = resolveURL(
-						ewabConfig.workPath,
-						markupPath,
+					const imagePath = resolveAppUrl(
+						markupFile,
 						img.srcset,
 					);
 
@@ -925,7 +885,7 @@ async function updateImageReferences(){
 
 		}
 
-		await fs.writeFile(markupPath, html.serialize());
+		await markupFile.write(markup.serialize());
 
 	}
 
@@ -1076,11 +1036,13 @@ export class ImagesMeta{
 }
 
 class ImageVersion{
+
 	constructor(entries = {}){
 		for(const key of Object.keys(entries)){
 			this[key] = entries[key];
 		}
 	}
+
 	path;
 	encoding;
 	width;
@@ -1118,7 +1080,7 @@ class ImageMeta extends ImageVersion{
 	}
 
 	matchVersion(entries = {}){
-		return [ ...this.matchAllVersions(entries) ][0];
+		return this.matchAllVersions(entries).next();
 	}
 
 	*matchAllVersions(entries = {}){

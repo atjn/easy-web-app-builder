@@ -44,10 +44,10 @@ const inserters = {
 
 		const parsedSetValue = JSON.parse(setValue);
 		if(workingObject.type && workingObject.type !== typeof parsedSetValue){
-			throw new Error(`The value to set (${parsedSetValue}) should be of type '${workingObject.type}', but is of type '${typeof parsedSetValue}'.`);
+			throw new TypeError(`The value to set (${parsedSetValue}) should be of type "${workingObject.type}", but is of type "${typeof parsedSetValue}".`);
 		}
 		if( workingObject.allow && !workingObject.allow.includes(parsedSetValue)){
-			throw new Error(`The value to set is '${parsedSetValue}', but it is only allowed to be: ${workingObject.allow.join(", ")}`);
+			throw new TypeError(`The value to set is "${parsedSetValue}", but it is only allowed to be: ${workingObject.allow.join(", ")}`);
 		}
 
 		delete workingObject.type;
@@ -93,7 +93,7 @@ function breakDownObject(sourceObject, commands){
 			}
 			workingObject = workingObject.keys[command];
 		}
-		if(!workingObject) throw Error(`The given object name '${command}' doesn't exist.`);
+		if(!workingObject) throw new TypeError(`The given object name "${command}" doesn't exist.`);
 	}
 	return {
 		object,

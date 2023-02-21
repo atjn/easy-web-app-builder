@@ -10,16 +10,14 @@ import fs from "fs-extra";
 
 import { hashElement as folderHash } from "folder-hash";
 import objectHash from "object-hash";
+import { getAllAppMarkupFiles } from "./tools.js";
 
 export const coreFileExtensions = ["html", "htm", "css", "js", "mjs", "cjs", "json", "svg"];
 import { log, bar } from "./log.js";
 
 import { generateSW } from "workbox-build";
 
-import jsdom from "jsdom";
-import glob from "tiny-glob";
-
-const logObjectStyle = "background:rgb(22 27 34);color:rgb(240 246 252);padding:.2em .4em;border-radius:.5em";
+//const logObjectStyle = "background:rgb(22 27 34);color:rgb(240 246 252);padding:.2em .4em;border-radius:.5em";
 
 /**
  * Links to the serviceworker from different parts of the project.
@@ -45,15 +43,13 @@ async function link(){
 
 		bar(.1);
 
-		for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
-			log(`Adding serviceworker elements to ${path.relative(ewabConfig.workPath, markupPath)}.`);
+		for await (const { markupFile, markup } of getAllAppMarkupFiles()){
+			log(`Adding serviceworker elements to ${markupFile}.`);
 
-			const html = new jsdom.JSDOM((await fs.readFile(markupPath)));
-
-			const bridge = html.window.document.createElement("script"); bridge.src = `${ewabConfig.alias}/serviceworker-bridge.js`; bridge.type = "module";
-			html.window.document.head.appendChild(bridge);
+			const bridge = markup.window.document.createElement("script"); bridge.src = `${ewabConfig.alias}/serviceworker-bridge.js`; bridge.type = "module";
+			markup.window.document.head.appendChild(bridge);
 		
-			await fs.writeFile(markupPath, html.serialize());
+			await markupFile.write(markup.serialize());
 
 		}
 

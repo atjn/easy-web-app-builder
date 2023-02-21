@@ -8,13 +8,8 @@
 import path from "node:path";
 import fs from "fs-extra";
 
-
-import jsdom from "jsdom";
-import glob from "tiny-glob";
-
-
 import { log, bar } from "./log.js";
-import { getExtension, fileExists } from "./tools.js";
+import { AppFile, getAllAppMarkupFiles, generateRelativeAppUrl } from "./tools.js";
 import { supportedIconPurposes } from "./config.js";
 
 /**
@@ -28,8 +23,8 @@ async function identify(){
 
 		bar((index + 1) / supportedIconPurposes.length, `Identifying main icon for purpose "${purpose}"`);
 
-		if(ewabConfig.icons.source[purpose] && !fileExists(path.join(ewabConfig.workPath, ewabConfig.icons.source[purpose]))){
-			log("warning", `Was unable to find the "${purpose}" source icon at '${ewabConfig.icons.source[purpose]}'. Will instead find the most suitable source icon automagically.`);
+		if(ewabConfig.icons.source[purpose] && !(await (new AppFile({appPath: ewabConfig.icons.source[purpose]}).exists()))){
+			log("warning", `Was unable to find the "${purpose}" source icon at "${ewabConfig.icons.source[purpose]}". Will instead find the most suitable source icon automagically.`);
 			ewabConfig.icons.source[purpose] = "";
 		}
 
@@ -37,37 +32,37 @@ async function identify(){
 
 			log(`No source icon with purpose "${purpose}" is defined in config, will instead find the biggest icon (in bytes) and use that as source icon.`);
 
-			let bestIconPath = "";
+			let bestIcon;
 			let hasSVG = false;
 			let largestIconSize = 0;
 
-			for(const iconPath of ewabConfig.icons.list[purpose].map(relativePath => path.join(ewabConfig.workPath, relativePath))){
+			for(const iconFile of ewabConfig.icons.list[purpose].map(appPath => new AppFile({appPath}))){
 
-				const isSVG = Boolean(getExtension(iconPath) === "svg");
+				const isSVG = Boolean(iconFile.extension === "svg");
 
 				if(hasSVG && !isSVG){
 					continue;
 				}
 
-				const iconSize = (await fs.stat(iconPath)).size;
+				const iconSize = (await fs.stat(iconFile.workPath)).size;
 
 				if(!hasSVG && isSVG){
 					log(`Found an SVG icon. Will find the biggest SVG icon (in bytes) and use that as the "${purpose}" source icon.`);
 					hasSVG = true;
-					bestIconPath = iconPath;
+					bestIcon = iconFile;
 					largestIconSize = iconSize;
 				}
 
 				if(iconSize > largestIconSize){
-					bestIconPath = iconPath;
+					bestIcon = iconFile;
 					largestIconSize = iconSize;
 				}
 
 			}
 
-			if(bestIconPath){
-				log(`Decided to use '${path.relative(ewabConfig.workPath, bestIconPath)}' as source icon for purpose "${purpose}".`);
-				ewabConfig.icons.source[purpose] = path.relative(ewabConfig.workPath, bestIconPath);
+			if(bestIcon){
+				log(`Decided to use "${bestIcon}" as source icon for purpose "${purpose}".`);
+				ewabConfig.icons.source[purpose] = bestIcon.appPath;
 			}else{
 				log("warning", `Was unable to find a source icon with purpose "${purpose}" to use for this webapp. Please link to one in ${ewabConfig.manifestPath}, ${ewabConfig.configName} or any HTML file. You can read more about purposes here: https://developer.mozilla.org/en-US/docs/Web/Manifest/icons#values`);
 			}
@@ -115,30 +110,28 @@ async function add(){
 		bar(0, "Adding icons to HTML files");
 		// TODO: Add support for passing through an SVG file
 
-		for(const markupPath of await glob("**/*.{html,htm}", {cwd: ewabConfig.workPath, absolute: true})){
+		for await (const { markupFile, markup } of getAllAppMarkupFiles()){
 
-			const html = new jsdom.JSDOM(await fs.readFile(markupPath));
-
-			if(!html?.window?.document?.head) continue;
+			if(!markup?.window?.document?.head) continue;
 
 			if(ewabConfig.icons.mergeMode.index === "override"){
-				for(const existingLink of html.window.document.head.querySelectorAll(`link[rel="icon"]`)){
+				for(const existingLink of markup.window.document.head.querySelectorAll(`link[rel="icon"]`)){
 					existingLink.remove();
 				}
 			}
 			if(ewabConfig.icons.source.any){
 				const iconMeta = ewabRuntime.imagesMeta.findByPath(ewabConfig.icons.source.any);
-				const iconVersionMeta = iconMeta.matchVersionClosestToWidth({encoding:{mimeType: "image/png"}}, 192, false, true);
+				const iconVersionMeta = iconMeta.matchVersionClosestToWidth({encoding: {mimeType: "image/png"}}, 192, false, true);
 
-				const newLink = html.window.document.createElement("link");
+				const newLink = markup.window.document.createElement("link");
 				newLink.rel = "icon";
-				newLink.href = path.relative(path.join(markupPath, ".."), iconVersionMeta.path);
+				newLink.href = generateRelativeAppUrl(markupFile, new AppFile({appPath: iconVersionMeta.path}));
 				newLink.type = iconVersionMeta.encoding.mimeType;
 				newLink.sizes = `${iconVersionMeta.width}x${iconVersionMeta.height}`;
-				html.window.document.head.appendChild(newLink);
+				markup.window.document.head.appendChild(newLink);
 			}
 			
-			await fs.writeFile(markupPath, html.serialize());
+			await markupFile.write(markup.serialize());
 
 		}
 
@@ -154,7 +147,7 @@ async function add(){
 
 			const iconMeta = ewabRuntime.imagesMeta.findByPath(ewabConfig.icons.source[purpose]);
 
-			for(const version of iconMeta.matchAllVersions({encoding:{mimeType: "image/png"}})){
+			for(const version of iconMeta.matchAllVersions({encoding: {mimeType: "image/png"}})){
 				ewabRuntime.manifest.icons.push({
 					src: path.relative(path.join(ewabConfig.manifestPath, ".."), path.relative(ewabConfig.workPath, version.path)),
 					type: version.encoding.mimeType,

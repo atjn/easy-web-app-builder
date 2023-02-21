@@ -75,7 +75,7 @@ export default async function (args){
 				name: "config.inputPath",
 				type: "list",
 				prefix: p, suffix: s,
-				message: `EWAB thinks that the source files for your website are in the folder called '${inputFolderCandidates[0]?.name}'. Is that correct?`,
+				message: `EWAB thinks that the source files for your website are in the folder called "${inputFolderCandidates[0]?.name}". Is that correct?`,
 				choices: [
 					"Yes!",
 					"No",
@@ -115,7 +115,7 @@ export default async function (args){
 				name: "config.outputPath",
 				type: "list",
 				prefix: p, suffix: s,
-				message: `When EWAB is done, it needs a folder to save the completed webapp in. It wants to call that folder '${metaData.outputFolderName}', is that cool?\n  ${chalk.dim(fs.pathExists(path.join(global.ewabConfig.rootPath, metaData.outputFolderName)) ? "A folder already exists at this path. It will be overwritten." : "There is no folder at this path right now, so there's no risk something wil be overwritten.")}`,
+				message: `When EWAB is done, it needs a folder to save the completed webapp in. It wants to call that folder "${metaData.outputFolderName}", is that cool?\n  ${chalk.dim(fs.pathExists(path.join(global.ewabConfig.rootPath, metaData.outputFolderName)) ? "A folder already exists at this path. It will be overwritten." : "There is no folder at this path right now, so there's no risk something wil be overwritten.")}`,
 				choices: [
 					"Yes!",
 					"No, I want to call it something else",
@@ -323,7 +323,7 @@ export default async function (args){
 			{
 				when: async () => {
 					const filePath = path.join(global.ewabConfig.rootPath, ".gitignore");
-					if(fileExists(filePath)){
+					if(await fileExists(filePath)){
 						const contents = await fs.readFile(filePath, "utf-8");
 						return !contents.includes(ewabPackage.name) && !contents.includes(global.ewabConfig.alias);
 					}
@@ -351,7 +351,7 @@ export default async function (args){
 			{
 				when: async () => {
 					const filePath = path.join(global.ewabConfig.rootPath, "package.json");
-					if(fileExists(filePath)){
+					if(await fileExists(filePath)){
 						try{
 							const json = await fs.readJson(filePath);
 							if(!json.scripts?.build?.includes(ewabPackage.name)) return true;
