@@ -1,0 +1,48 @@
+name: Usability
+
+on: 
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "34 10 12 * *"
+
+permissions:
+  contents: read
+
+jobs:
+
+  test:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # These version names ensure that new Node versions are automatically tested,
+        # but also ensures that the oldest supported version is changed on purpose.
+        node-version: [14.13, lts/-1, lts/*, latest]
+        os: [ubuntu-latest]
+        include:
+          - node-version: lts/*
+            os: windows-latest
+          - node-version: lts/*
+            os: macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install-clean
+
+      - name: Test usability
+        run: npm run test:unit

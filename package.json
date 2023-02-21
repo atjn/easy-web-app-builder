@@ -26,7 +26,9 @@
     "build:workbox": "node \"build/workbox.js\"",
     "build": "npm run build:docs && npm run build:workbox",
     "test:usability": "",
-    "test": "npm install && npm run build && npm run lint:nofix && npm run test:usability"
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js \"tests/unit/.*\"",
+    "test:unit:dev": "node --experimental-vm-modules node_modules/jest/bin/jest.js \"tests/unit/.*\" --watch",
+    "test": "npm run build && npm run lint:nofix && npm run test:unit && npm run test:usability"
   },
   "repository": {
     "type": "git",
@@ -93,6 +95,7 @@
     "eslint": "^8.34.0",
     "eslint-plugin-jsdoc": "^39.8.0",
     "eslint-plugin-promise": "^6.1.1",
+    "jest": "^29.4.3",
     "workbox-window": "^6.5.4"
   }
 }
