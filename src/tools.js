@@ -77,9 +77,7 @@ export function generateRelativeAppUrl(fromFile, toFile){
  */
 export function resolveAppUrl(appFile, url, resolveOutisdeAppRoot = false){
 
-	// TODO: Ensure that this follows the spec correctly. Maybe create a separate project for it.
-	// https://url.spec.whatwg.org/#urls
-	// https://wpt.fyi/results/url
+	// TODO: This should probably be replaced with the whatwg-url node package
 
 	const dirtyUrlPath = url.match(/^(?![^/.]*?\/\/)(?<path>.*)$/ui)?.groups?.path;
 	if(!dirtyUrlPath) return null;
