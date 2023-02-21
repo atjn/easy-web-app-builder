@@ -1,4 +1,4 @@
-/* global ewabConfig */
+/* global ewabConfig ewabRuntime */
 
 /**
  * @file
@@ -25,9 +25,9 @@ const progressBar = {
 
 let warmupLogged = false;
 
-const deferredLogs = [];
+const allLogs = [];
 
-let disabled = false;
+let loggingDisabled = false;
 
 /**
  * Works mostly like `.padStart()` and `.padEnd()`, but splits the padding evenly between start and end, effectively centering the text.
@@ -47,14 +47,15 @@ String.prototype.padAround = function (length, padding){
 
 /**
  * Takes any log message and figures out how/if it should be logged.
- * Any message that is logged without a defined type will default to `debug`.
+ * If called with only a single string, that is logged as a `debug` message.
  * 
- * @param	{"standard"|"debug"|"warning"|"error"|"modern-only"}	[type]	- What kind of message it is.
- * @param	{string}												message	- The message to log.
+ * @param	{"standard"|"debug"|"warning"|"error"|"modern-only"}	[type] - What kind of message it is.
+ * @param	{string}												[message] - The message to log.
+ * @param	{Error}													[error] - The error to throw. Only used when `type` = "error".
  */
-export function log(type = "debug", message){
+export function log(type = "debug", message, error){
 
-	if(disabled) return;
+	if(loggingDisabled) return;
 
 	//This is a pro gamer move that allows logging debug messages without having to define "debug" a million times.
 	if(message === undefined){
@@ -66,12 +67,20 @@ export function log(type = "debug", message){
 
 		bar.freeze();
 		console.log(`${chalk.black.bgRed("error".padAround(progressBar.length, " "))} ${chalk.red(message)}${ewabConfig.interface === "debug" ? "" : "\n"}`);
-		files.clean();
-		throw new Error(message);
+		if(ewabConfig.ignoreErrors){
+			log("warning", "Will ignore this error and try to complete the process. Please disable this behavior (config.ignoreErrors) before publishing to production!");
+		}else{
+			ewabRuntime.fatalErrorEncountered = true;
+			// Decoupling the cleanup function gives other read/write functions a chance to complete and exit.
+			setTimeout(async () => {
+				await files.clean();
+				throw error;
+			}, 10);
+		}
 
 	}else if(!ewabConfig.interface){
 
-		deferredLogs.push({type, message});
+		allLogs.push({type, message});
 
 	}else if(type === "warning"){
 
@@ -111,18 +120,18 @@ log.warmup = (possibleInterface) => {
 	
 	if(ewabConfig.interface){
 
-		disabled = Boolean(ewabConfig.interface === "none");
+		loggingDisabled = Boolean(ewabConfig.interface === "none");
 
 		const headerWidth = 26;
 		log("modern-only", chalk.black.bgCyan(`\n${"".padAround(headerWidth, " ")}\n${"Easy Web App Builder".padAround(headerWidth, " ")}\n${"".padAround(headerWidth, " ")}\n`));
 
 		bar.begin("Warming up");
 
-		for(const deferredLog of deferredLogs){
-			log(deferredLog.type, deferredLog.message);
+		for(const queuedLog of allLogs){
+			log(queuedLog.type, queuedLog.message);
 		}
 
-		log(`Figured out that interface '${ewabConfig.interface}' should be used. Will now log ${deferredLogs.length + 1} logs that were queued for this moment.`);
+		log(`Figured out that interface "${ewabConfig.interface}" should be used. Will now log ${allLogs.length + 1} logs that were queued.`);
 
 		warmupLogged = true;
 
@@ -137,7 +146,7 @@ log.warmup = (possibleInterface) => {
  */
 export function bar(progress, message){
 
-	if(disabled) return;
+	if(loggingDisabled) return;
 
 	progressBar.progress = progress;
 
@@ -163,7 +172,7 @@ export function bar(progress, message){
  */
 bar.begin = (message) => {
 
-	if(disabled) return;
+	if(loggingDisabled) return;
 
 	progressBar.progress = 0;
 	progressBar.message = message;
@@ -190,7 +199,7 @@ bar.begin = (message) => {
  */
 bar.end = (message) => {
 
-	if(disabled) return;
+	if(loggingDisabled) return;
 
 	bar.hide();
 	
@@ -205,7 +214,7 @@ bar.end = (message) => {
  */
 bar.hide = () => {
 
-	if(disabled) return;
+	if(loggingDisabled) return;
 
 	if(progressBar.pulse){
 		clearInterval(progressBar.pulse);
@@ -219,7 +228,7 @@ bar.hide = () => {
  */
 bar.freeze = () => {
 
-	if(disabled) return;
+	if(loggingDisabled) return;
 
 	if(progressBar.pulse){
 		clearInterval(progressBar.pulse);

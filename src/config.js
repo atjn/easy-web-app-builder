@@ -95,6 +95,7 @@ async function generateMain(callConfig){
 	mainConfig.hash = objectHash(mainConfig);
 
 	if(mainConfig.alias !== defaults.alias) log(`NOTE: The EWAB alias has been changed to "${mainConfig.alias}". If this alias collides with other names in the project, it could cause weird behavior.`);
+	if(mainConfig.ignoreErrors) log("warning", `EWAB has been instructed to ignore errors. This should only be used for debugging purposes. Before publishing to production, please disable config.ignoreErrors.`);
 
 	return mainConfig;
 
@@ -177,6 +178,8 @@ const options = {
 			.valid(...Object.keys(logInterfaces)),
 
 		useCache: joi.boolean().default(true).description("if a cache should be used to speed up consecutive runs"),
+
+		ignoreErrors: joi.boolean().default(false).description("if EWAB should ignore runtime errors"),
 
 		inputPath: joi.string().description("path to the input folder"),
 

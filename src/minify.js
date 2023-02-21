@@ -389,6 +389,7 @@ async function minify(processType){
  */
 async function processItem({processType, appFile}){
 
+	if(fatalError(`processing of ${appFile}`)) return;
 
 	try{
 

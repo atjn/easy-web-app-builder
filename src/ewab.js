@@ -21,6 +21,11 @@ const ewabRuntime = {
 	sourcePath: ewabSourcePath,
 	minifiedItemHashes: [],
 	imagesMeta: new ImagesMeta(),
+	/**
+	 * If the process encounters a fatal error, this is used to signal to running processes that they should halt work.
+	 * This is especially useful for file operations, which could be writing to storage while the process is stopping.
+	 */
+	fatalErrorEncountered: false,
 };
 
 

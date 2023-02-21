@@ -215,6 +215,23 @@ export function deepMerge(source, update){
 export function deepClone(source){
 	return lodash.cloneDeep(source);
 
+}
+/**
+ * When starting a new procedure, this can be called to check if EWAB has
+ * encountered a fatal error, in which case the process should halt immediately.
+ *
+ * @param {string} processDescription - Description of the starting process which is used in debug log messages.
+ * @returns {boolean} - Whether or not EWAB has encountered a fatal error.
+ */
+export function fatalError(processDescription){
+	if(ewabRuntime?.fatalErrorEncountered){
+		log(`Skipping ${processDescription} because EWAB encountered a fatal error`);
+		return true;
+	}else{
+		return false;
+	}
+}
+
 /**
  * Represents a file in the filesystem.
  */
@@ -279,6 +296,7 @@ export class File{
 	 * @returns {Promise<string|object>} - The contents of the file.
 	 */
 	async read(readAs = "string"){
+		if(fatalError(`read of ${this}`)) return emptyVersionOf(readAs);
 		
 		try {
 			switch(readAs){
@@ -321,6 +339,7 @@ export class File{
 	 * @returns {Promise<void>}
 	 */
 	async write(content){
+		if(fatalError(`write to "${this}"`)) return;
 
 		try{
 			if(typeof content === "string"){
@@ -340,6 +359,8 @@ export class File{
 	 * @returns {Promise<void>}
 	 */
 	async copyTo(file){
+		if(fatalError(`copying of "${this}" to "${file}"`)) return;
+
 		try{
 			return await fs.copy(this.absolutePath, file.absolutePath);
 		}catch(error){
@@ -353,6 +374,8 @@ export class File{
 	 * @returns {Promise<void>}
 	 */
 	async delete(){
+		if(fatalError(`deleting "${this}"`)) return;
+
 		return await fs.remove(this.absolutePath);
 	}
 
@@ -363,6 +386,8 @@ export class File{
 	 * @returns {Promise<string>} - The hash as a hex string.
 	 */
 	async getHash(){
+		if(fatalError(`hash read of "${this}"`)) return "";
+
 		return (await hashElement(this.absolutePath, { "encoding": "hex" })).hash;
 	}
 
