@@ -645,8 +645,6 @@ async function processItem({processType, appFile}){
 					
 				}
 
-				if(!appFile.config.images.keepOriginal) await appFile.delete();
-
 				log(`Completed compression of ${appFile}:`);
 				for(const report of reports) log(`  ${report}`);
 
@@ -912,7 +910,7 @@ function processConvertSettings(convertConfig, originalSize){
 	}
 	convertConfig.size = Math.min(convertConfig.size, convertConfig.maxSize);
 
-	if(ewabConfig.images.keepOriginal) convertConfig.sizes.push(Math.max(originalSize.width, originalSize.height));
+	convertConfig.sizes.push(Math.max(originalSize.width, originalSize.height));
 
 	convertConfig.sizes.push(convertConfig.size);
 

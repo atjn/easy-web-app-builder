@@ -77,7 +77,6 @@ This is an overview of the entire configuration file.
     directOptions: Object
   },
   images: {
-    keepOriginal: Boolean: true
     compress: {
       enable: Boolean: true
       subject: String: "auto" ("auto", "flat", "organic")
@@ -123,7 +122,6 @@ This is an overview of the entire configuration file.
         directOptions: Object
       },
       images: {
-        keepOriginal: Boolean: true
         compress: {
           enable: Boolean: true
           subject: String: "auto" ("auto", "flat", "organic")

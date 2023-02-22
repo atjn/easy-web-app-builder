@@ -64,8 +64,6 @@ async function seal(){
 
 		log("Cleaning and sealing cache to make it ready for next run");
 
-		await cleanUnusedFiles(path.join(ewabConfig.rootPath, ewabConfig.inputPath), ewabConfig.cachePath);
-
 		await fs.writeJson(
 			path.join(ewabConfig.cachePath, "cache-hash.json"),
 			{
@@ -104,27 +102,5 @@ async function generateHash(){
 			},
 		},
 	)).hash;
-
-}
-
-/**
- * Removes files from the cache which aren't part of the source project anymore.
- */
-async function cleanUnusedFiles(){
-
-	for(const itemPath of getFolderFiles(path.join(ewabConfig.cachePath, "/items"))){
-
-		let remove = true;
-
-		findMatch: for(const hash of ewabRuntime.minifiedItemHashes){
-			if(itemPath.includes(hash)){
-				remove = false;
-				break findMatch;
-			}
-		}
-
-		if(remove) await fs.remove(path.join(ewabConfig.cachePath, "/items", itemPath));
-
-	}
 
 }

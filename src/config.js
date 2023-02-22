@@ -249,9 +249,6 @@ const options = {
 
 		images: joi.object({
 
-			//TODO: Change to "keepUnreferenced", which streamlines the code a lot
-			keepOriginal: joi.boolean().default(true),
-
 			compress: joi.object({
 
 				enable: joi.boolean().default(true),
