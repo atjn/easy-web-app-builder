@@ -787,13 +787,13 @@ async function updateImageReferences(){
 						}
 					});
 
-					console.log("images", images.entries());
+					//console.log("images", images.entries());
 					for(const ruleProperties of images.values()){
-						console.log("ruleProperties", ruleProperties);
+						//console.log("ruleProperties", ruleProperties);
 						for(const generalPropertyImages of ruleProperties){
-							console.log("generalPropertyImages", generalPropertyImages.entries());
+							//console.log("generalPropertyImages", generalPropertyImages.entries());
 							for(const propertyImages of generalPropertyImages.values()){
-								console.log("propertyImages", propertyImages);
+								//console.log("propertyImages", propertyImages);
 								let bestUrl;
 								for(const image of propertyImages){
 									for(const url of image.urls){
