@@ -138,6 +138,35 @@ export function resolveAppUrl(appFile, url, resolveOutisdeAppRoot = false){
 }
 
 /**
+ * Takes any srcset referenced in any app file and returns an AppFile for the largest file referenced in it.
+ * Note that this is trusting the user to have defined sizes correctly.
+ * 
+ * @param {AppFile} appFile - AppFile for the file that the srcset is referenced in.
+ * @param {string | string[]} srcsets - The srcset or array of srcsets from the file.
+ * @param {boolean} resolveOutisdeAppRoot - Whether or not the urls can reference files outside of the app root folder.
+ * 
+ * @returns	{AppFile | null} - AppFile for the best file that the srcset was referring to, or null if the srcset could not be parsed.
+ */
+export function resolveAppSrcset(appFile, srcsets, resolveOutisdeAppRoot = false){
+	srcsets ??= "";
+	const srcset = typeof srcsets === "string" ? srcsets : srcsets.join(",");
+
+	let bestImage;
+
+	for(const srcsetPart of srcset.split(",")){
+		const imageCandidate = srcsetPart.match(/^\s*(?<url>\S*)(?:\s+(?<size>[.\d]+)[a-z]{1,5})?\s*$/ui);
+		imageCandidate.appFile = resolveAppUrl(appFile, imageCandidate?.groups?.url || "", resolveOutisdeAppRoot);
+		if(imageCandidate.appFile){
+			if(!bestImage || (!bestImage.size && imageCandidate.size) || imageCandidate.size > bestImage.size){
+				bestImage = imageCandidate;
+			}
+		}
+	}
+
+	return bestImage?.appFile || null;
+}
+
+/**
  * The NPM package file.
  */
 export const ewabPackage = fs.readJsonSync(path.join(ewabSourcePath, "package.json"));
@@ -169,13 +198,23 @@ export function getSubfolders(folderPath){
 }
 
 /**
- * Checks if a file exists at a certain path. (synhcronous).
+ * Checks if a file exists at a certain path.
  * 
  * @param {string} filePath	- Absolute path of the file to check.
  * @returns	{Promise<boolean>} - Wether the file exists or not.
  */
 export async function fileExists(filePath){
 	return Boolean(await fs.exists(filePath) && (await fs.lstat(filePath)).isFile());
+}
+
+/**
+ * Checks if a file exists at a certain path. (synhcronous).
+ * 
+ * @param {string} filePath	- Absolute path of the file to check.
+ * @returns	{boolean} - Wether the file exists or not.
+ */
+export function fileExistsSync(filePath){
+	return Boolean(fs.existsSync(filePath) && fs.lstatSync(filePath).isFile());
 }
 
 /**
@@ -542,6 +581,13 @@ export class AppFile extends File{
 		return sourceMap;
 	}
 
+	get meta(){
+		return ewabRuntime.appFilesMeta.get(this);
+	}
+	set meta(value){
+		ewabRuntime.appFilesMeta.set(value);
+	}
+
 	/**
 	 * The config for the app file, taking into account any `fileExceptions`.
 	 * TODO: Implement caching for this, it is causing ridiculous amounts of CPU and read usage.
@@ -605,3 +651,15 @@ export async function *getAllAppMarkupFiles(){
 	}
 }
 
+/**
+ * Finds all sheet files in the app.
+ *
+ * @yields {object} - The markup as an AppFile and a parsed PostCSS AST object.
+ */
+export async function *getAllAppSheetFiles(){
+	for await (const sheetFile of globApp("**/*.{css}")){
+		yield {
+			sheetFile,
+		};
+	}
+}

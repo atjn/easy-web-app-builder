@@ -120,8 +120,8 @@ async function add(){
 				}
 			}
 			if(ewabConfig.icons.source.any){
-				const iconMeta = ewabRuntime.imagesMeta.findByPath(ewabConfig.icons.source.any);
-				const iconVersionMeta = iconMeta.matchVersionClosestToWidth({encoding: {mimeType: "image/png"}}, 192, false, true);
+				const iconMeta = ewabRuntime.appFilesMeta.get(new AppFile({appPath: ewabConfig.icons.source.any}));
+				const iconVersionMeta = iconMeta.matchImageVersionClosestToWidth({encoding: {mimeType: "image/png"}}, 192, false, true);
 
 				const newLink = markup.window.document.createElement("link");
 				newLink.rel = "icon";
@@ -145,7 +145,7 @@ async function add(){
 		for(const purpose of supportedIconPurposes){
 			if(!ewabConfig.icons.source[purpose]) continue;
 
-			const iconMeta = ewabRuntime.imagesMeta.findByPath(ewabConfig.icons.source[purpose]);
+			const iconMeta = ewabRuntime.appFilesMeta.get(new AppFile({appPath: ewabConfig.icons.source[purpose]}));
 
 			for(const version of iconMeta.matchAllVersions({encoding: {mimeType: "image/png"}})){
 				ewabRuntime.manifest.icons.push({

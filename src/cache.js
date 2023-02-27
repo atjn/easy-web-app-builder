@@ -1,4 +1,4 @@
-/* global ewabConfig ewabRuntime */
+/* global ewabConfig */
 
 /**
  * @file
@@ -9,7 +9,7 @@ import path from "node:path";
 import fs from "fs-extra";
 import { hashElement as folderHash } from "folder-hash";
 
-import { ewabPackage, getFolderFiles } from "./tools.js";
+import { ewabPackage } from "./tools.js";
 import { log } from "./log.js";
 
 export default { ensure, seal };

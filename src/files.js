@@ -16,6 +16,101 @@ import { defaults, supportedIconPurposes } from "./config.js";
 import glob from "tiny-glob";
 import escapeStringRegexp from "escape-string-regexp";
 
+export class AppFilesMeta{
+	#files = new Map();
+
+	set(appFileMeta){
+		this.#files.set(appFileMeta.appFile.appPath, appFileMeta);
+	}
+
+	get(appFile){
+		return this.#files.get(appFile.appPath) || new AppFileMeta({appFile});
+	}
+
+}
+
+export class AppFileMeta{
+	constructor(entries = {}){
+		for(const key of Object.keys(entries)){
+			this[key] = entries[key];
+		}
+	}
+
+	#appPath;
+
+	/**
+	 * The AppFile that corresponds to this meta information.
+	 */
+	set appFile(value){
+		this.#appPath = value.appPath;
+	}
+	get appFile(){
+		return new AppFile({appPath: this.#appPath});
+	}
+
+	// Is it a JS module
+	isModule;
+
+
+
+	imageVersions = [];
+
+	matchImageVersionClosestToWidth(entries, desiredWidth, canBeSmaller = true, canBeLarger = true){
+		const candidates = this.matchAllImageVersions(entries);
+
+		let bestCandidate;
+		for(const version of candidates){
+			const delta = version.width - desiredWidth;
+			if(!bestCandidate || Math.abs(delta) < Math.abs(bestCandidate.width - desiredWidth)){
+				if( (canBeSmaller || delta >= 0) && (canBeLarger || delta <= 0) ){
+					bestCandidate = version;
+				}
+			}
+		}
+		return bestCandidate;
+	}
+
+	*matchAllImageVersions(entries = {}){
+		for(const version of this.imageVersions){
+			let matches = true;
+			for(const key of Object.keys(entries)){
+				if(key === "encoding"){
+					if(version.encoding.mimeType !== entries.encoding.mimeType) matches = false;
+				}else{
+					if(version[key] !== entries[key]) matches = false;
+				}
+			}
+			if(matches) yield version;
+		}
+	}
+
+}
+
+export class ImageVersion{
+	constructor(entries = {}){
+		for(const key of Object.keys(entries)){
+			this[key] = entries[key];
+		}
+	}
+
+	#appPath;
+
+	/**
+	 * The AppFile that corresponds to this meta information.
+	 */
+	set appFile(value){
+		this.#appPath = value.appPath;
+	}
+	get appFile(){
+		return new AppFile({appPath: this.#appPath});
+	}
+
+	encoding;
+	width;
+	height;
+	constraint;
+}
+
 
 /**
  * Creates a workFolder where the source website will be manipulated by EWAB.
@@ -362,7 +457,7 @@ async function begin(){
 	}
 
 
-	log("Collecting script metadata");
+	log("Collecting file metadata");
 	for await (const { markupFile, markup } of getAllAppMarkupFiles()){
 
 		for(const script of markup.window.document.querySelectorAll("script[src]")){

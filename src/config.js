@@ -278,7 +278,7 @@ const options = {
 
 				sizeSteps: joi.number().positive().default(0.60),
 
-				size: joi.number().integer().positive(),
+				size: joi.number().integer().positive().default(1080),
 
 				sizes: joi.array().items(joi.number().integer().positive()),
 

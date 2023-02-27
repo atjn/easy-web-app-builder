@@ -8,8 +8,9 @@
 
 import path from "node:path";
 import fs from "fs-extra";
+import { AppFileMeta, ImageVersion } from "./files.js";
 import { log, bar } from "./log.js";
-import { File, resolveAppUrl, globApp, fatalError } from "./tools.js";
+import { File, resolveAppUrl, globApp, fatalError, generateRelativeAppUrl, resolveAppSrcset, getAllAppSheetFiles, fileExistsSync } from "./tools.js";
 import { supportedImageExtensions } from "./config.js";
 
 import newVips from "wasm-vips";
@@ -40,6 +41,9 @@ import { minify as htmlMinifier } from "html-minifier-terser";
 import { minify as terser } from "terser";
 import CleanCSS from "clean-css";
 import { optimize as svgo } from "svgo";
+
+import postcss from "postcss";
+import cssValueParser from "postcss-value-parser";
 
 import asyncPool from "tiny-async-pool";
 import { getAllAppMarkupFiles, AppFile } from "./tools.js";
@@ -265,7 +269,7 @@ class ImageEncodings{
 
 }
 
-const imageEncodings = new ImageEncodings();
+export const imageEncodings = new ImageEncodings();
 
 
 
@@ -366,16 +370,16 @@ async function minify(processType){
 		bar(completedItemProcesses / itemProcessingQueue.length);
 	}
 
+	if(processType === "images"){
+
+		await updateImageReferences();
+
+	}
+
 	if(itemProcessingQueue.length === 0){
 		bar.hide();
 	}else{
 		bar.end(`${processName.action.past} ${itemProcessingQueue.length} ${itemProcessingQueue.length === 1 ? processName.item.singular : processName.item.plural}`);
-	}
-
-	if(processType === "images" && ewabConfig.images.updateReferences){
-
-		await updateImageReferences();
-
 	}
 
 }
@@ -564,13 +568,12 @@ async function processItem({processType, appFile}){
 
 				const targetExtensions = [ ...new Set([ ...appFile.config.images.convert.targetExtensions, appFile.config.images.convert.targetExtension ]) ];
 
-				const newImageMeta = ewabRuntime.imagesMeta.new({
-					path: appFile.appPath,
-					hash: originalHash,
+				const newImageMeta = new AppFileMeta({
+					appFile,
 					width: originalSize.width,
 					height: originalSize.height,
-					fileConfig: appFile.config,
 				});
+				ewabRuntime.appFilesMeta.set(newImageMeta);
 
 				for(const sizeConstraint of appFile.config.images.convert.enable ? appFile.config.images.convert.sizes : [ originalSize.width ]){
 
@@ -625,14 +628,14 @@ async function processItem({processType, appFile}){
 						await Promise.all(targetExtensions.map(targetExtension => {
 							const newImagePath = transformImagePath(appFile.workPath, fittedImageSize.width, {extension: targetExtension});
 							const targetEncoding = imageEncodings.match(targetExtension);
-							newImageMeta.newVersion({
-								path: newImagePath,
+							newImageMeta.imageVersions.push(new ImageVersion({
+								appFile: new AppFile({workPath: newImagePath}),
 								type: targetExtension,
 								encoding: targetEncoding,
 								width: fittedImageSize.width,
 								height: fittedImageSize.height,
 								constraint: sizeConstraint,
-							});
+							}));
 							return fs.copy(`${cachedImagePath}.${targetExtension}`, newImagePath);
 						}));
 					
@@ -654,8 +657,6 @@ async function processItem({processType, appFile}){
 
 		}
 
-		ewabRuntime.minifiedItemHashes.push(originalHash);
-
 	}catch(error){
 
 		if(String(error).includes("has an unsupported format")){
@@ -675,212 +676,356 @@ async function processItem({processType, appFile}){
  */
 async function updateImageReferences(){
 
-	for await (const sheetFile of globApp("**/*.css")){
+	for await (const { sheetFile } of getAllAppSheetFiles()){
 
-		let css = await sheetFile.read();
+		/**
+		 *
+		 */
+		const imageSetTransformer = () => ({
+			postcssPlugin: "ewab-image-reference-transformer",
+			Once(root){
+				root.walkRules(rule => {
+					/*
+					Map(property) => [group nr inside rule] => Map(outer value) => urls: [{
+						declaration,
+						urls => [
+							{
+								url: String,
+								size: String | undefined,
+							}
+						],
+						outerValue => String
+					}]
+					*/
+					const images = new Map();
+					const lastNodeProperty = "";
+					const lastNodeIndex = -Infinity;
+					/**
+					 *
+					 * @param property
+					 * @param image
+					 */
+					function setNewImage(image){
+						const propertyImages = images.get(image.declaration.prop) || [];
 
-		// Find any background properties using simple url(), and convert them to image-set() if it is necessary 
-		let match = true;
-		while(match){
-			const imageSet = css.match(/(?<match>(?<pre>\bbackground(?:-image)?\s*?:\s*?[,\s])url\(\s*?["']?(?<url>[^\s]*?)["']?\s*?\)(?<pro>\s*?[;}]))/uisg);
-			if(imageSet === null){
-				match = false;
-				break;
-			}
+						const nodeIndex = rule.index(image.declaration);
+						let currentGroupIndex = propertyImages.length - 1;
+						if(lastNodeProperty !== image.declaration.property || lastNodeIndex < nodeIndex - 1){
+							currentGroupIndex++;
+						}
 
-			const imagePath = resolveAppUrl(
-				sheetFile,
-				imageSet.groups.url,
-			);
-
-			const imageMeta = ewabRuntime.imagesMeta.findByPath(imagePath);
-			const fileConfig = imageMeta?.fileConfig;
-
-			if(!imageMeta){
-				log(`In ${sheetFile}: URL ${imageSet.groups.url} at index ${imageSet.index} does not correlate with a minified image, aborting upgrade to an image-set.`);
-			}if(!fileConfig.images.convert.enable){
-				log(`In ${sheetFile}: URL ${imageSet.groups.url} at index ${imageSet.index} does not have a modifed URL, so no reason to upgrade to image-set.`);
-			}else{
-
-				log(`In ${sheetFile}: upgrading url to image-set for URL ${imageSet.groups.url} at index ${imageSet.index}.`);
-
-				css = css.replace(imageSet.groups.match, `${imageSet.groups.pre}image-set("${imageSet.groups.url}")${imageSet.groups.pro}`);
-			}
-		}
-
-		// Find any image-set and expand it with extra images + fallback versions
-		match = true;
-		while(match){
-			const imageSet = css.match(/(?<match>(?<pre>\bbackground-image\s*?:[^;]*?\s*?[,\s])(?:image-set)\(\s*?["']?(?<url>[^\s'"]*?)["']?\s*?\)(?<pro>[^{]*?[;}]))/uisg);
-			if(imageSet === null){
-				match = false;
-				break;
-			}
-
-			const imagePath = resolveAppUrl(
-				sheetFile,
-				imageSet.groups.url,
-			);
-
-			const imageMeta = ewabRuntime.imagesMeta.findByPath(imagePath);
-			const fileConfig = imageMeta?.fileConfig;
-
-			if(!imageMeta){
-				log(`In ${sheetFile}: URL ${imageSet.groups.url} at index ${imageSet.index} does not correlate with a minified image, aborting upgrade of the image-set.`);
-			}if(!fileConfig.images.convert.enable){
-				log(`In ${sheetFile}: URL ${imageSet.groups.url} at index ${imageSet.index} does not have a modifed URL, so no reason to upgrade image-set.`);
-			}else{
-
-				log(`In ${sheetFile}: upgrading image-set for URL ${imageSet.groups.url} at index ${imageSet.index}.`);
-
-				const fallBackImage = imageMeta.matchVersion({
-					constraint: fileConfig.images.convert.size,
-					encoding: fileConfig.images.convert.targetExtension,
-				});
-				const fallBackImageUrl = transformImagePath(imageSet.groups.url, fallBackImage.width, fallBackImage.encoding);
-
-				const lines = [];
-
-				const ewabMark = `/*${ewabConfig.alias}*/`;
-
-				// Support details: https://caniuse.com/css-image-set
-
-				// Chromium support
-				lines.push(`${imageSet.groups.pre}-webkit-image-set(url("${fallBackImageUrl}") ${ewabMark} )${imageSet.groups.pro}`);
-
-				// WebKit support
-				lines.push(`${imageSet.groups.pre}image-set("${fallBackImageUrl}") ${ewabMark} )${imageSet.groups.pro}`);
-
-				// Gecko support, best so far
-				const imageTypeLines = [];
-				for(const extension of imageMeta.fileConfig.images.convert.targetExtensions){
-					const encoding = imageEncodings.match(extension);
-					const image = imageMeta.matchVersion({
-						constraint: fallBackImage.constraint,
-						encoding,
-					});
-					const newUrl = transformImagePath(imageSet.groups.url, image.width, image.encoding);
-					imageTypeLines.push(`"${newUrl}" type("${encoding.mimeType}")`);
-				}
-				lines.push(`${imageSet.groups.pre}image-set(${ imageTypeLines.join(`,\n`) }) ${ewabMark} )${imageSet.groups.pro}`);
-				
-				// Ideal setup, not supported anywhere yet
-				const imageWidthTypeLines = [];
-				for(const extension of imageMeta.fileConfig.images.convert.targetExtensions){
-					const encoding = imageEncodings.match(extension);
-					for(const size of imageMeta.fileConfig.images.convert.sizes){
-						const image = imageMeta.matchVersion({
-							constraint: size,
-							encoding,
-						});
-						const newUrl = transformImagePath(imageSet.groups.url, image.width, image.encoding);
-						imageWidthTypeLines.push(`"${newUrl}" type("${encoding.mimeType}") ${image.width}w`);
+						const generalGroupImages = propertyImages[currentGroupIndex] || new Map();
+						const groupImages = generalGroupImages.get(image.outerValue) || [];
+						groupImages.push(image);
+						generalGroupImages.set(image.outerValue, groupImages);
+						propertyImages[currentGroupIndex] = generalGroupImages;
+						images.set(image.declaration.prop, propertyImages);
 					}
-				}
-				lines.push(`${imageSet.groups.pre}image-set(${ imageTypeLines.join(`,\n`) }) ${ewabMark} )${imageSet.groups.pro}`);
 
-		
+					rule.walkDecls(declaration => {
+						const valueRoot = cssValueParser(declaration.value);
+						let match = false;
+						const urls = [];
+						let valueIndex;
 
-				css = css.replace(imageSet.groups.match, lines.join(`\n`));
+						let currentValueIndex = -1;
+						valueRoot.nodes.forEach(node => {
+							currentValueIndex++;
+							if(node.type === "function" && node.value === "url"){
+								if(node.nodes.length === 1 && ["word", "string"].includes(node.nodes[0].type)){
+									urls.push({
+										url: node.nodes[0].value,
+									});
+									valueIndex ??= currentValueIndex;
+									match = true;
+								}
+							}
+							if(node.value === "image-set"){
+								let nodeMatch = false;
+								for(let [index, setUrl] of node.nodes.entries()){
+									if(setUrl.type === "function" && setUrl.value === "url"){
+										if(setUrl.nodes.length === 1 && ["word", "string"].includes(setUrl.nodes[0].type)){
+											setUrl = setUrl.nodes[0];
+											setUrl.type = "string";
+										}
+									}
+									const startDelimiter = node.nodes[index - 1];
+									const spaceOrEndDelimiter = node.nodes[index + 1];
+									const sizeWord = node.nodes[index + 2];
+									const endDelimiter = node.nodes[index + 3];
+									if(
+										( !startDelimiter || startDelimiter.type === "div" ) &&
+										( setUrl.type === "string" ) &&
+										( !spaceOrEndDelimiter || (
+											spaceOrEndDelimiter.type === "space" &&
+												sizeWord.type === "word" &&
+												( !endDelimiter || endDelimiter.type === "div" )
+										)
+										)
+									){
+										const sizeMatch = sizeWord?.value?.match?.(/^(?<size>\d+.?\d*)[a-z]{1,5}$/ui);	
+										urls.push({
+											url: setUrl.value,
+											size: sizeMatch?.groups?.size,
+										});
+										valueIndex ??= currentValueIndex;
+										nodeMatch = true;
+									}
+								}
+								if(nodeMatch){
+									match = true;
+								}
+							}
+						});
+						if(match){
+							setNewImage({
+								declaration,
+								urls,
+								outerValue: valueRoot.nodes.map(node => node.value).join(""),
+								valueIndex,
+							});
+						}
+					});
 
+					console.log("images", images.entries());
+					for(const ruleProperties of images.values()){
+						console.log("ruleProperties", ruleProperties);
+						for(const generalPropertyImages of ruleProperties){
+							console.log("generalPropertyImages", generalPropertyImages.entries());
+							for(const propertyImages of generalPropertyImages.values()){
+								console.log("propertyImages", propertyImages);
+								let bestUrl;
+								for(const image of propertyImages){
+									for(const url of image.urls){
+										if(!bestUrl || (url.size && (!bestUrl.size || url.size > bestUrl.size))){
+											bestUrl = url;
+										}
+									}
+								}
+								// Overwrite the existing assignments with the default template, trying to keep as much as possible from the original styles.
+								// This is complicated, but helps keep the sourceMap as accurate as possible, which makes it easier to debug the styles later on.
+								const declarationTemplate = ["url", "set-types", "set-sizes-types"];
+								const bestImageFile = resolveAppUrl(sheetFile, bestUrl.url);
+								if(!fileExistsSync(bestImageFile.workPath)){
+									log("warning", `You have defined an image with path: ${bestUrl.url} in ${sheetFile} "${rule.selector}" (line ${rule.source.start.line}:${rule.source.start.column}), which do not seem to exist. Please remove references to files that don't exist.`);
+									continue;
+								}
+								const bestImageConfig = bestImageFile.config;
+								let propertyDeclarationIndex = -1;
+								for(const template of declarationTemplate){
+									propertyDeclarationIndex++;
+									if(propertyDeclarationIndex >= propertyImages.length){
+										const newDeclaration = propertyImages.at(-1).declaration.cloneAfter();
+										propertyImages.push({...propertyImages.at(-1), ...{declaration: newDeclaration}});
+									}
+									const existingDeclaration = propertyImages[propertyDeclarationIndex].declaration;
+									switch(template){
+										case "url": {
+											const targetEncoding = imageEncodings.match(bestImageConfig.images.convert.targetExtension);
+											const bestUrl = generateRelativeAppUrl(sheetFile, bestImageFile.meta.matchImageVersionClosestToWidth({encoding: targetEncoding}, bestImageConfig.images.convert.size).appFile);
+											existingDeclaration.value = `url("${bestUrl}")`;
+											break;
+										}
+										case "set-types": {
+											const setVersions = [];
+											for(const targetExtension of bestImageConfig.images.convert.targetExtensions){
+												const targetEncoding = imageEncodings.match(targetExtension);
+												const bestUrl = generateRelativeAppUrl(sheetFile, bestImageFile.meta.matchImageVersionClosestToWidth({encoding: targetEncoding}, bestImageConfig.images.convert.size).appFile);
+												setVersions.push(`url("${bestUrl}") 1x type("${targetEncoding.mimeType}")`);
+											}
+											existingDeclaration.value = `image-set(${setVersions.join(", ")})`;
+											break;
+										}
+										case "set-sizes-types": {
+											const setVersions = [];
+											for(const targetExtension of bestImageConfig.images.convert.targetExtensions){
+												const targetEncoding = imageEncodings.match(targetExtension);
+												for(const imageVersion of bestImageFile.meta.matchAllImageVersions({encoding: targetEncoding})){
+													const bestUrl = generateRelativeAppUrl(sheetFile, imageVersion.appFile);
+													setVersions.push(`url("${bestUrl}") ${imageVersion.width}w type("${targetEncoding.mimeType}")`);
+												}
+											}
+											existingDeclaration.value = `image-set(${setVersions.join(", ")})`;
+											break;
+										}
+									}
+								}
+								while(propertyDeclarationIndex < propertyImages.length - 1){
+									const extraProperty = propertyImages.pop();
+									extraProperty.declaration.remove();
+								}
+							}
+						}
+					}
+				});
+			},
+		});
+		imageSetTransformer.postcss = true;
+		const cssProcessor = postcss([imageSetTransformer]);
 
-			}
-			
-
-		}
-
-		await sheetFile.write(css);
-
+		const result = await cssProcessor.process(await sheetFile.read(), { from: sheetFile.appPath, to: sheetFile.appPath });
+		sheetFile.write(result.css);
 
 	}
+
+	log("Looking for HTML files with image references that need to be updated.");
 	
 	for await (const { markupFile, markup } of getAllAppMarkupFiles()){
 
-		if(markup?.window?.document){
+		if(markupFile.config.images.updateReferences && markup?.window?.document) continue;
 
-			for(const img of markup.window.document.querySelectorAll("picture > img")){
-					
-				const srcPath = resolveAppUrl(
+		const pictureElements = markup.window.document.querySelectorAll("picture");
+
+		if(pictureElements.length > 0) log(`Found ${pictureElements.length} picture elements in ${markupFile}, will try to update them now.`);
+
+		for(const picture of pictureElements){
+
+			const sources = [];
+			/**
+			 * Saves the source correctly. Sources are grouped with other sources that use the same media attribute. They should be identical.
+			 *
+			 * @param {object} newSource - Information about the new source.
+			 */
+			function setNewSource(newSource){
+
+				newSource.media = newSource.media?.trim?.() || "";
+				if(typeof newSource.srcsets === "string") newSource.srcsets = [ newSource.srcsets ];
+				newSource.srcsets = newSource.srcsets.filter(srcset => srcset);
+
+				for(const [index, source] of sources.entries()){
+					if(source.media === newSource.media){
+						source.srcsets = [ ...source.srcsets, ...newSource.srcsets ];
+						sources[index] = source;
+						return;
+					}
+				}
+				// If no existing source was found
+				sources.push(newSource);
+			}
+			/**
+			 * Returns a group of sources that corresponds to a given media.
+			 * Normal img elements should always have `media = ""`.
+			 *
+			 * @param {string} media - The media query.
+			 */
+			function matchSource(media){
+				media = media?.trim?.() || "";
+
+				for(const source of sources){
+					if(source.media === media) return source;
+				}
+				// If no existing source was found
+				return null;
+			}
+
+			const imgList = picture.querySelectorAll("img");
+
+			if(imgList.length === 0){
+				log("warning", `You have defined a <picture> element which contains no <img> element (in ${markupFile}). This will not work properly in browsers, please add an <img> element.`);
+				continue;
+			}else if(imgList.length > 1){
+				log("warning", `You have defined a <picture> element which contains more than one <img> element (in ${markupFile}). This can result in unexpected behavior, please only define a single <img> element.`);
+			}
+
+			const sourceList = picture.querySelectorAll("source");
+			
+			for(const source of sourceList){
+				setNewSource({
+					media: source.media,
+					sizes: source.sizes,
+					srcsets: source.srcset,
+				});
+				source.remove();
+			}
+
+			for(const [index, img] of imgList.entries()){
+				setNewSource({
+					srcsets: [img.src, img.srcset],
+				});
+				if(index > 0) img.remove();
+			}
+
+			const sourceElements = [];
+
+			for(const source of sources){
+				const sourceFile = resolveAppSrcset(
 					markupFile,
-					img.src ?? "",
+					source.srcsets,
 				);
-				const srcsetPath = resolveAppUrl(
-					markupFile,
-					img.srcset ?? "",
-				);
-
-				let imagePath;
-				let srcType;
-
-				if(ewabRuntime.minifiedItemsMeta.has(srcsetPath)){
-					imagePath = srcsetPath;
-					srcType = "srcset";
-				}else if(ewabRuntime.minifiedItemsMeta.has(srcPath)){
-					imagePath = srcPath;
-					srcType = "src";
-				}else{
+				if(!sourceFile){
+					log("warning", `You have defined images with paths: ${source.srcsets} in ${markupFile}, which do not seem to exist. Please remove references to files that don't exist.`);
 					continue;
 				}
-				const itemMeta = ewabRuntime.minifiedItemsMeta.get(imagePath);
-				const fileConfig = itemMeta.fileConfig;
-				const url = img[srcType];
-
-				if(fileConfig.images.updateReferences){
-
-					for(const targetExtension of fileConfig.images.convert.targetExtensions){
-						const newURL = url.replace(/\.\w+$/u, `.${targetExtension}`);
-						const mimeType = `image/${targetExtension === "jpg" ? "jpeg" : targetExtension}`;
-
-						if(targetExtension === fileConfig.images.convert.targetExtensions[fileConfig.images.convert.targetExtensions.length - 1]){
-							img[srcType] = newURL;
-						}else{
-							const source = markup.window.document.createElement("source");
-							source[srcType] = newURL;
-							source.type = mimeType;
-
-							img.parentElement.insertBefore(source, img);
-						}
-
+				const sourceConfig = sourceFile.config;
+				for(const targetExtension of sourceConfig.images.convert.targetExtensions){
+					const targetEncoding = imageEncodings.match(targetExtension);
+					const sourceElement = markup.window.document.createElement("source");
+					if(source.media) sourceElement.media = source.media;
+					sourceElement.type = targetEncoding.mimeType;
+					if(source.sizes) sourceElement.sizes = source.sizes;
+					const srcsetParts = [];
+					for(const imageVersion of sourceFile.meta.matchAllImageVersions({encoding: targetEncoding})){
+						const url = generateRelativeAppUrl(markupFile, imageVersion.appFile);
+						srcsetParts.push(`${url} ${imageVersion.width}w`);
 					}
+					sourceElement.srcset = srcsetParts.join(",");
 
+					sourceElements.push(sourceElement);
 				}
-
 			}
+			picture.prepend(...sourceElements);
 
-			for(const img of markup.window.document.querySelectorAll("img, picture > source")){
-
-				if((/^\s*[^,\s]+$/u).test(img.srcset)){
-
-					const imagePath = resolveAppUrl(
-						markupFile,
-						img.srcset,
-					);
-
-					if(ewabRuntime.minifiedItemsMeta.has(imagePath)){
-
-						const itemMeta = ewabRuntime.minifiedItemsMeta.get(imagePath);
-						const fileConfig = itemMeta.fileConfig;
-
-						if(fileConfig.images.compress.enable && fileConfig.images.convert){
-							//fileConfig.images.convert = processConvertSettings(fileConfig.images.convert, imagePath);
-
-							if(fileConfig.images.convert.addSizesTagToImg && fileConfig.images.convert.sizes) img.sizes = img.sizes ?? fileConfig.images.convert.sizes;
-
-							const srcset = [];
-
-							for(const size of fileConfig.images.convert.resizeTo){
-								srcset.push(`${img.srcset.replace(/\.\w+$/u, `-${size.width}w$&`)} ${size.width}w`);
-							}
-
-							img.srcset = srcset.join(", ");
-
-						}
-
-					}
-
-				}
-
+			const imgSource = matchSource("");
+			const imgFile = resolveAppSrcset(
+				markupFile,
+				imgSource.srcsets,
+			);
+			if(!imgFile){
+				log("warning", `You have defined images with paths: ${imgSource.srcset} in ${markupFile}, which do not seem to exist. Please remove references to files that don't exist.`);
+				continue;
 			}
+			const imgConfig = imgFile.config;
+			const imgElement = imgList[0];
+
+			const targetEncoding = imageEncodings.match(imgConfig.images.convert.targetExtension);
+
+			if(imgSource.sizes) imgElement.sizes = imgSource.sizes;
+			const srcsetParts = [];
+			for(const imageVersion of imgFile.meta.matchAllImageVersions({encoding: targetEncoding})){
+				const url = generateRelativeAppUrl(markupFile, imageVersion.appFile);
+				srcsetParts.push(`${url} ${imageVersion.width}w`);
+			}
+			imgElement.srcset = srcsetParts.join(", ");
+			imgElement.src = generateRelativeAppUrl(markupFile, imgFile.meta.matchImageVersionClosestToWidth({encoding: targetEncoding}, imgConfig.images.convert.size).appFile);
+		}
+
+		const imgElements = markup.window.document.querySelectorAll(":not(picture) > img");
+
+		if(pictureElements.length > 0) log(`Found ${pictureElements.length} img elements in ${markupFile}, will try to update them now.`);
+		// TODO: Add hints here that the img files should be upgraded to picture files.
+
+		for(const img of imgElements){
+
+			const imgFile = resolveAppSrcset(
+				markupFile,
+				[img.src, img.srcset],
+			);
+			if(!imgFile){
+				log("warning", `You have defined images with paths: ${[img.src, img.srcset]} in ${markupFile}, which do not seem to exist. Please remove references to files that don't exist.`);
+				continue;
+			}
+			const imgConfig = imgFile.config;
+
+			const targetEncoding = imageEncodings.match(imgConfig.images.convert.targetExtension);
+			
+			img.width ||= imgFile.meta.width;
+			const srcsetParts = [];
+			for(const imageVersion of imgFile.meta.matchAllImageVersions({encoding: targetEncoding})){
+				const url = generateRelativeAppUrl(markupFile, imageVersion.appFile);
+				srcsetParts.push(`${url} ${imageVersion.width}w`);
+			}
+			img.srcset = srcsetParts.join(", ");
+			img.src = generateRelativeAppUrl(markupFile, imgFile.meta.matchImageVersionClosestToWidth({encoding: targetEncoding}, imgConfig.images.convert.size).appFile);
 
 		}
 
@@ -901,13 +1046,6 @@ async function updateImageReferences(){
  */
 function processConvertSettings(convertConfig, originalSize){
 
-	if(!convertConfig.size){
-		convertConfig.size = Math.max(
-			Math.min(originalSize.width, 1920),
-			Math.min(originalSize.height, 1920), 
-		);
-		//log(`No fallback size set in config, so decided that ${convertConfig.fallbackSize} pixels was reasonable.`);
-	}
 	convertConfig.size = Math.min(convertConfig.size, convertConfig.maxSize);
 
 	convertConfig.sizes.push(Math.max(originalSize.width, originalSize.height));
@@ -946,7 +1084,7 @@ function processConvertSettings(convertConfig, originalSize){
 		return true;
 	});
 
-	// Make sure they are sorted from largest to smallest to make sure largeer images
+	// Make sure they are sorted from largest to smallest to make sure larger images
 	// exclude smaller images, and not vice-versa
 	extraSizes.sort((a, b) => {return b - a;});
 
@@ -1005,96 +1143,3 @@ function fitImageSizeToConstraints(imageSize, imageConstraint, allowOversizing =
 	};
 
 }
-
-
-export class ImagesMeta{
-	images = [];
-
-	new(keys){
-		const newImage = new ImageMeta(keys);
-		this.images.push(newImage);
-		return newImage;
-	}
-
-	findByPath(path){
-		for(const image of this.images){
-			if(image.path === path){
-				return image;
-			}
-		}
-	}
-
-	findByHash(hash){
-		for(const image of this.images){
-			if(image.hash === hash){
-				return image;
-			}
-		}
-	}
-
-}
-
-class ImageVersion{
-
-	constructor(entries = {}){
-		for(const key of Object.keys(entries)){
-			this[key] = entries[key];
-		}
-	}
-
-	path;
-	encoding;
-	width;
-	height;
-	constraint;
-}
-
-class ImageMeta extends ImageVersion{
-	constructor(keys){
-		super(keys);
-	}
-	hash;
-	fileConfig;
-	versions = [];
-
-	newVersion(keys){
-		const newVersion = new ImageVersion(keys);
-		this.versions.push(newVersion);
-		return newVersion;
-	}
-
-	matchVersionClosestToWidth(entries, desiredWidth, canBeSmaller, canBeLarger){
-		const candidates = this.matchAllVersions(entries);
-
-		let bestCandidate;
-		for(const version of candidates){
-			const delta = version.width - desiredWidth;
-			if(!bestCandidate || Math.abs(delta) < Math.abs(bestCandidate.width - desiredWidth)){
-				if( (canBeSmaller || delta >= 0) && (canBeLarger || delta <= 0) ){
-					bestCandidate = version;
-				}
-			}
-		}
-		return bestCandidate;
-	}
-
-	matchVersion(entries = {}){
-		return this.matchAllVersions(entries).next();
-	}
-
-	*matchAllVersions(entries = {}){
-		for(const version of this.versions){
-			let matches = true;
-			for(const key of Object.keys(entries)){
-				if(key === "encoding"){
-					if(version.encoding.mimeType !== entries.encoding.mimeType) matches = false;
-				}else{
-					if(version[key] !== entries[key]) matches = false;
-				}
-			}
-			if(matches) yield version;
-		}
-	}
-
-}
-
