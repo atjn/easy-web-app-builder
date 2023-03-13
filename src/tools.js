@@ -380,9 +380,9 @@ export class File{
 
 		try{
 			if(typeof content === "string"){
-				return await fs.writeFile(this.absolutePath, content);
+				return await fs.outputFile(this.absolutePath, content);
 			}else{
-				return await fs.writeJson(this.absolutePath, content);
+				return await fs.outputJson(this.absolutePath, content);
 			}
 		}catch(error){
 			log("error", `Encountered an error while writing file "${this}"`, error);
@@ -426,6 +426,17 @@ export class File{
 		if(fatalError(`hash read of "${this}"`)) return "";
 
 		return (await hashElement(this.absolutePath, { "encoding": "hex" })).hash;
+	}
+
+	/**
+	 * Tests whether the given file os of the type specified.
+	 * TODO: Maybe this should do proper type sniffing in the future?
+	 *
+	 * @param {string} type - The extension type. 
+	 * @returns {boolean} - Whether or not this file os of the given type.
+	 */
+	is(type){
+		return Boolean(type === this.extension);
 	}
 
 	toString(){
@@ -599,6 +610,8 @@ export class AppFile extends File{
 		for(const exception of ewabConfig.fileExceptions){
 			if(minimatch(this.appPath, exception.glob)){
 				exceptionsConfig = deepMerge(exceptionsConfig, exception);
+				if(exceptionsConfig?.images?.convert?.targetExtensions) exceptionsConfig.images.convert.targetExtensions = exception.images.convert.targetExtensions;
+				if(exceptionsConfig?.images?.convert?.sizes) exceptionsConfig.images.convert.sizes = exception.images.convert.sizes;
 				delete exceptionsConfig.glob;
 			}
 		}
@@ -662,4 +675,52 @@ export async function *getAllAppSheetFiles(){
 			sheetFile,
 		};
 	}
+}
+
+import newVips from "wasm-vips";
+export const vips = await newVips({
+
+	// Necessary per Feb 2023 in order to enable SVG support
+	// TODO: Should not be necessary in a future stable version
+	dynamicLibraries: ["vips-jxl.wasm", "vips-heif.wasm", "vips-resvg.wasm"],
+
+	// Necessary per 2022 to ensure that wasm-vips doesn't just print randomly to the console
+	// TODO: In a future stable version, find a better solution to this
+	print: stdout => {log(`From wasm-vips: ${stdout}`);},
+	printErr: stderr => {log(`Error from wasm-vips: ${stderr}`);},
+	preRun: module => {
+		module.print = stdout => {log(`From wasm-vips: ${stdout}`);};
+		module.printErr = stderr => {log(`Error from wasm-vips: ${stderr}`);};
+	},
+	postRunt: module => {
+		module.print = stdout => {log(`From wasm-vips: ${stdout}`);};
+		module.printErr = stderr => {log(`Error from wasm-vips: ${stderr}`);};
+	},
+
+});
+
+export const defaultVipsForeignOptions = {
+	access: vips.Access.sequential,
+};
+
+/**
+ * A simple wrapper for accessing a new image file correctly.
+ *
+ * @param {AppFile} appFile - The file to open.
+ * @param {object} options - Vips foreignload options.
+ * @returns {vips.Image} - The image representation in Vips.
+ */
+export function vipsImageFromFile(appFile, options = {}){
+	return vips.Image.newFromFile(appFile.workPath, { ...defaultVipsForeignOptions, ...options });
+}
+
+/**
+ * A simple wrapper for accessing a new SVG image file correctly.
+ *
+ * @param {AppFile} appFile - The file to open.
+ * @param {object} options - Vips foreignsvgload options.
+ * @returns {vips.Image} - The image representation in Vips.
+ */
+export function vipsImageFromSvgFile(appFile, options = {}){
+	return vips.Image.svgload(appFile.workPath, { ...defaultVipsForeignOptions, ...options });
 }

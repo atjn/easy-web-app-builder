@@ -30,29 +30,24 @@ This is an overview of the entire configuration file.
     //if custom icons should be added to the app
     add: Boolean: true
     
-    //path to the icons to generate all other icons from. Icons are split into purposes: https://developer.mozilla.org/en-US/docs/Web/Manifest/icons#values
     source: {
+      //the main icon
+      main: String
+      
+      //a background image to use for maskable icons
+      backgroundImage: String
+      
+      //a background color to use for maskable icons
+      backgroundColor: String
+      
+    },
+    //path to the icons to generate all other icons from. Icons are split into purposes: https://developer.mozilla.org/en-US/docs/Web/Manifest/icons#values
+    custom: {
       any: String
       maskable: String
       monochrome: String
     },
     
-    //list of all icons currently in the project
-    list: {
-      any: [
-        String
-      ],
-      maskable: [
-        String
-      ],
-      monochrome: [
-        String
-      ],
-    },
-    
-    blockList: [
-      String
-    ],
     mergeMode: {
       index: String: "override" ("override", "combine")
       manifest: String: "override" ("override", "combine")
@@ -92,7 +87,7 @@ This is an overview of the entire configuration file.
       maxSize: Number: 3840
       minSize: Number: 64
       sizeSteps: Number: 0.6
-      size: Number
+      size: Number: 1080
       sizes: [
         Number
       ],
@@ -137,7 +132,7 @@ This is an overview of the entire configuration file.
           maxSize: Number: 3840
           minSize: Number: 64
           sizeSteps: Number: 0.6
-          size: Number
+          size: Number: 1080
           sizes: [
             Number
           ],

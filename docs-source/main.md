@@ -79,11 +79,14 @@ When EWAB is done, it will output the final website to a new folder. If you want
 insert[setConfigValue outputPath "path/to/output/folder/"]
 
 ## Icons
-By default, EWAB will find your website's favicon, generate it in different sizes, and then add the new copies to the website. If you don't want EWAB to mess with your icons, you can set:
+By default, EWAB will find your website's icons, generate them in different sizes, and then add the new copies to the website. If you don't want EWAB to mess with your icons, you can set:
 insert[setConfigValue icons add false]
 
-If EWAB is using the wrong image as favicon, you can tell it exactly which icon it should use by setting:
-insert[setConfigValue icons source any "path/to/your/favicon.svg"]
+EWAB can also generate your different icons for you if you link to your main app icon here:
+insert[setConfigValue icons source main "path/to/your/favicon.svg"]
+
+If EWAB is using the wrong image for certain icons, you can tell it exactly which icon it should use by setting:
+insert[setConfigValue icons custom any "path/to/your/favicon.svg"]
 
 ## Images
 

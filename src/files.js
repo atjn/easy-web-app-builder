@@ -376,7 +376,7 @@ async function begin(){
 	log("Discovering and verifying icons");
 
 	for(const purpose of supportedIconPurposes){
-		ewabConfig.icons.list[purpose] = ewabConfig.icons.list[purpose].filter(async iconPath => {
+		ewabRuntime.iconsList[purpose] = ewabRuntime.iconsList[purpose].filter(async iconPath => {
 			const iconFile = new AppFile({appPath: iconPath});
 			if(await iconFile.exists()){
 				return true;
@@ -404,7 +404,7 @@ async function begin(){
 
 		log(`${foundIcons.length > 0 ? `Found ${foundIcons.length}` : "Did not find any"} references to icons with purpose "any" in "${markupFile}".${foundIcons.length > 0 ? " Adding them to the icons list." : ""}`);
 
-		ewabConfig.icons.list.any.push(...foundIcons.map(iconFile => iconFile.appPath));
+		ewabRuntime.iconsList.any.push(...foundIcons.map(iconFile => iconFile.appPath));
 
 	}
 
@@ -436,16 +436,16 @@ async function begin(){
 		const count = foundManifestIcons[purpose].length;
 		log(`${count > 0 ? `Found ${count}` : "Did not find any"} references to icons with purpose "${purpose}" in manifest.${count > 0 ? " Adding them to the icons list." : ""}`);
 	
-		ewabConfig.icons.list[purpose].push(...foundManifestIcons[purpose].map(iconFile => iconFile.appPath));
+		ewabRuntime.iconsList[purpose].push(...foundManifestIcons[purpose].map(iconFile => iconFile.appPath));
 
 		//Remove duplicates
-		ewabConfig.icons.list[purpose] = [ ...new Set([ ...ewabConfig.icons.list[purpose] ]) ];
+		ewabRuntime.iconsList[purpose] = [ ...new Set([ ...ewabRuntime.iconsList[purpose] ]) ];
 	}
 
 	// Ensure that the same icon has not been defined for multiple purposes
 	const iconPurposeMap = new Map();
 	for(const purpose of supportedIconPurposes){
-		for(const icon of ewabConfig.icons.list[purpose]){
+		for(const icon of ewabRuntime.iconsList[purpose]){
 			iconPurposeMap.set(
 				icon,
 				(iconPurposeMap.get(icon) || []).push(purpose),

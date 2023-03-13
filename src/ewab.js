@@ -7,7 +7,7 @@
 import { ewabSourcePath } from "./tools.js";
 
 import { log, bar } from "./log.js";
-import config from "./config.js";
+import config, { supportedIconPurposes } from "./config.js";
 import cache from "./cache.js";
 import files, { AppFilesMeta } from "./files.js";
 import minify from "./minify.js";
@@ -20,6 +20,7 @@ import serviceworker from "./serviceworker.js";
 const ewabRuntime = {
 	sourcePath: ewabSourcePath,
 	appFilesMeta: new AppFilesMeta(),
+	iconsList: [...supportedIconPurposes].reduce((object, purpose) => { return { [purpose]: [], ...object }; }, {}),
 	/**
 	 * If the process encounters a fatal error, this is used to signal to running processes that they should halt work.
 	 * This is especially useful for file operations, which could be writing to storage while the process is stopping.
@@ -52,9 +53,9 @@ export default async function (callConfig = {}){
 	bar.hide();
 
 
-	await minify("remove");
-	
 	await icons.identify();
+	
+	await minify("remove");
 
 	await minify("images");
 

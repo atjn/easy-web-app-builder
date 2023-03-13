@@ -10,30 +10,8 @@ import path from "node:path";
 import fs from "fs-extra";
 import { AppFileMeta, ImageVersion } from "./files.js";
 import { log, bar } from "./log.js";
-import { File, resolveAppUrl, globApp, fatalError, generateRelativeAppUrl, resolveAppSrcset, getAllAppSheetFiles, fileExistsSync } from "./tools.js";
+import { File, resolveAppUrl, globApp, fatalError, generateRelativeAppUrl, resolveAppSrcset, getAllAppSheetFiles, fileExistsSync, vips, vipsImageFromFile, vipsImageFromSvgFile } from "./tools.js";
 import { supportedImageExtensions } from "./config.js";
-
-import newVips from "wasm-vips";
-const vips = await newVips({
-
-	// Necessary per Feb 2023 in order to enable SVG support
-	// TODO: Should not be necessary in a future stable version
-	dynamicLibraries: ["vips-jxl.wasm", "vips-heif.wasm", "vips-resvg.wasm"],
-
-	// Necessary per 2022 to ensure that wasm-vips doesn't just print randomly to the console
-	// TODO: In a future stable version, find a better solution to this
-	print: stdout => {log(`From wasm-vips: ${stdout}`);},
-	printErr: stderr => {log(`Error from wasm-vips: ${stderr}`);},
-	preRun: module => {
-		module.print = stdout => {log(`From wasm-vips: ${stdout}`);};
-		module.printErr = stderr => {log(`Error from wasm-vips: ${stderr}`);};
-	},
-	postRunt: module => {
-		module.print = stdout => {log(`From wasm-vips: ${stdout}`);};
-		module.printErr = stderr => {log(`Error from wasm-vips: ${stderr}`);};
-	},
-
-});
 
 import os from "node:os";
 
@@ -256,6 +234,11 @@ class ImageEncodings{
 					compression: 8,
 				},
 			},
+		}),
+		new ImageEncoding({
+			mimeType: "image/svg+xml",
+			extension: "svg",
+			encodingEngine: "htmlparser2",
 		}),
 	];
 
@@ -557,7 +540,7 @@ async function processItem({processType, appFile}){
 				log(`Compressing "${appFile}"..`);
 				const reports = [];
 
-				const originalImage = vips.Image.newFromFile(appFile.workPath);
+				const originalImage = vipsImageFromFile(appFile);
 
 				const originalSize = {
 					width: originalImage.width,
@@ -575,11 +558,21 @@ async function processItem({processType, appFile}){
 				});
 				ewabRuntime.appFilesMeta.set(newImageMeta);
 
-				for(const sizeConstraint of appFile.config.images.convert.enable ? appFile.config.images.convert.sizes : [ originalSize.width ]){
+				if(appFile.is("svg")){
+					newImageMeta.imageVersions.push(new ImageVersion({
+						appFile,
+						type: "svg",
+						encoding: imageEncodings.match("svg"),
+					}));
+				}
+
+				const sortedSizeConstraints = [ ...new Set([ appFile.config.images.convert.size, ...appFile.config.images.convert.sizes ]) ].sort((a, b) => b - a);
+
+				for(const sizeConstraint of appFile.config.images.convert.enable ? sortedSizeConstraints : [ originalSize.width ]){
 
 					try{
 
-						const isSvg = Boolean(appFile.extension === "svg");
+						const isSvg = appFile.is("svg");
 
 						const fittedImageSize = fitImageSizeToConstraints(originalSize, sizeConstraint, isSvg);
 
@@ -598,7 +591,7 @@ async function processItem({processType, appFile}){
 						}else{
 
 							const image = isSvg
-								?	vips.Image.svgload(appFile.workPath, {scale: fittedImageSize.width / originalImage.width})
+								?	vipsImageFromSvgFile(appFile, {scale: fittedImageSize.width / originalImage.width})
 								:	originalImage.resize(fittedImageSize.width / originalImage.width);
 
 							for(const targetExtension of targetExtensions){

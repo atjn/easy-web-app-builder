@@ -191,13 +191,17 @@ const options = {
 
 			add: joi.boolean().default(true).description("if custom icons should be added to the app"),
 
-			source: joi.object([...supportedIconPurposes].reverse().reduce((object, purpose) => { return { [purpose]: joi.string(), ...object }; }, {})).description("path to the icons to generate all other icons from. Icons are split into purposes: https://developer.mozilla.org/en-US/docs/Web/Manifest/icons#values"),
+			source: joi.object({
 
-			list: joi.object([...supportedIconPurposes].reverse().reduce((object, purpose) => { return { [purpose]: joi.array().items(joi.string()), ...object }; }, {})).description("list of all icons currently in the project"),
+				main: joi.string().description("the main icon"),
 
-			blockList: joi.array().items(
-				joi.string(),
-			),
+				backgroundImage: joi.string().description("a background image to use for maskable icons"),
+
+				backgroundColor: joi.string().description("a background color to use for maskable icons"),
+
+			}),
+
+			custom: joi.object([...supportedIconPurposes].reverse().reduce((object, purpose) => { return { [purpose]: joi.string(), ...object }; }, {})).description("path to the icons to generate all other icons from. Icons are split into purposes: https://developer.mozilla.org/en-US/docs/Web/Manifest/icons#values"),
 
 			mergeMode: joi.object({
 
