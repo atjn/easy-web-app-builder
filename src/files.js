@@ -462,7 +462,7 @@ async function begin(){
 
 		for(const script of markup.window.document.querySelectorAll("script[src]")){
 			const scriptFile = resolveAppUrl(markupFile, script.src);
-			if(!(await scriptFile.exists())){
+			if(!(await scriptFile?.exists())){
 				log("warning", `Found a reference to a script "${scriptFile}" in "${markupFile}", but was unable to find a script at that path. Please remove any broken references to scripts.`);
 				continue;
 			}

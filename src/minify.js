@@ -800,7 +800,7 @@ async function updateImageReferences(){
 								// This is complicated, but helps keep the sourceMap as accurate as possible, which makes it easier to debug the styles later on.
 								const declarationTemplate = ["url", "set-types", "set-sizes-types"];
 								const bestImageFile = resolveAppUrl(sheetFile, bestUrl.url);
-								if(!fileExistsSync(bestImageFile.workPath)){
+								if(!fileExistsSync(bestImageFile?.workPath)){
 									log("warning", `You have defined an image with path: ${bestUrl.url} in ${sheetFile} "${rule.selector}" (line ${rule.source.start.line}:${rule.source.start.column}), which do not seem to exist. Please remove references to files that don't exist.`);
 									continue;
 								}
