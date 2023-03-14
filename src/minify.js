@@ -416,6 +416,7 @@ async function processItem({processType, appFile}){
 									decodeEntities: true,
 									minifyCSS: true,
 									minifyJS: true,
+									processScripts: ["application/ld+json"],
 									removeAttributeQuotes: true,
 									removeComments: true,
 									removeEmptyAttributes: true,
