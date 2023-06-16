@@ -394,7 +394,7 @@ async function begin(){
 		for(const icon of markup.window.document.head.querySelectorAll("link[rel*=icon]")){
 			if(icon.href){
 				const iconFile = resolveAppUrl(markupFile, icon.href);
-				if(await iconFile.exists()){
+				if(await iconFile?.exists()){
 					foundIcons.push(iconFile);
 				}else{
 					log("warning", `Found a reference to an icon "${iconFile}" in "${markupFile}", but was unable to find an icon at that path. Please remove any broken references to icons.`);
@@ -425,7 +425,7 @@ async function begin(){
 				foundPurposes.push("any");
 			}
 
-			if(await iconFile.exists()){
+			if(await iconFile?.exists()){
 				for(const purpose of foundPurposes) foundManifestIcons[purpose].push(iconFile);
 			}else{
 				log("warning", `Found a reference to an icon "${iconFile}" in the manifest, but was unable to find an icon at that path. Please remove any broken references to icons.`);
