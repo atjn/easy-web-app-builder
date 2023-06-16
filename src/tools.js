@@ -10,7 +10,7 @@ import fs from "fs-extra";
 import url from "node:url";
 
 import tinyGlob from "tiny-glob";
-import minimatch from "minimatch";
+import { minimatch } from "minimatch";
 import { hashElement } from "folder-hash";
 import jsdom from "jsdom";
 import lodash from "lodash";
