@@ -35,7 +35,7 @@ const ewabRuntime = {
  * 
  * @param {object} callConfig	- 
  */
-export default async function (callConfig = {}){
+export default async function (callConfig = {config: {}}){
 
 	global.ewabRuntime = ewabRuntime;
 	global.ewabConfig = {};

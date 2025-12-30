@@ -1,0 +1,9 @@
+* {
+	background: image-set( url("test.jpg") 1x, url("test.jpg") 2x);
+}
+* {
+	background-image: url(test.jpg);
+	background: url("test.jpg") none / rgb(244 255 255);
+	top: 5vh;
+	background-image: image-set("test.jpg" 200w);
+}

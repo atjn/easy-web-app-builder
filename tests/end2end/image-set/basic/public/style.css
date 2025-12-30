@@ -1,0 +1,17 @@
+* {
+	background: url("test-200w.jpg");
+	background: image-set(url("test-200w.webp") 1x type("image/webp"), url("test-200w.jpg") 1x type("image/jpeg"));
+	background: image-set(url("test-700w.webp") 700w type("image/webp"), url("test-200w.webp") 200w type("image/webp"), url("test-700w.jpg") 700w type("image/jpeg"), url("test-200w.jpg") 200w type("image/jpeg"));
+}
+* {
+	background-image: url("test-200w.jpg");
+	background-image: image-set(url("test-200w.webp") 1x type("image/webp"), url("test-200w.jpg") 1x type("image/jpeg"));
+	background-image: image-set(url("test-700w.webp") 700w type("image/webp"), url("test-200w.webp") 200w type("image/webp"), url("test-700w.jpg") 700w type("image/jpeg"), url("test-200w.jpg") 200w type("image/jpeg"));
+	background: url("test-200w.jpg");
+	background: image-set(url("test-200w.webp") 1x type("image/webp"), url("test-200w.jpg") 1x type("image/jpeg"));
+	background: image-set(url("test-700w.webp") 700w type("image/webp"), url("test-200w.webp") 200w type("image/webp"), url("test-700w.jpg") 700w type("image/jpeg"), url("test-200w.jpg") 200w type("image/jpeg"));
+	top: 5vh;
+	background-image: url("test-200w.jpg");
+	background-image: image-set(url("test-200w.webp") 1x type("image/webp"), url("test-200w.jpg") 1x type("image/jpeg"));
+	background-image: image-set(url("test-700w.webp") 700w type("image/webp"), url("test-200w.webp") 200w type("image/webp"), url("test-700w.jpg") 700w type("image/jpeg"), url("test-200w.jpg") 200w type("image/jpeg"));
+}

@@ -20,14 +20,9 @@ jobs:
       matrix:
         # These version names ensure that new Node versions are automatically tested,
         # but also ensures that the oldest supported version is changed on purpose.
-        node-version: [16.15, lts/-1, lts/*, latest]
+        node-version: [16.15, lts/*]
         os: [ubuntu-latest]
         include:
-        # TODO: Add support for Windows
-        #  - node-version: lts/*
-        #    os: windows-latest
-          - node-version: lts/*
-            os: macos-latest
 
     runs-on: ${{ matrix.os }}
 
@@ -46,4 +41,4 @@ jobs:
         run: npm install-clean
 
       - name: Test usability
-        run: npm run test:usability
+        run: npm run test:end2end

@@ -25,10 +25,11 @@
     "build:docs": "node \"build/docs.js\"",
     "build:workbox": "node \"build/workbox.js\"",
     "build": "npm run build:docs && npm run build:workbox",
-    "test:usability": "",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js \"tests/unit/.*\"",
     "test:unit:dev": "node --experimental-vm-modules node_modules/jest/bin/jest.js \"tests/unit/.*\" --watch",
-    "test": "npm run build && npm run lint:nofix && npm run test:unit && npm run test:usability"
+    "test:end2end": "node --experimental-vm-modules node_modules/jest/bin/jest.js \"tests/end2end/.*\"",
+    "test:end2end:dev": "node --experimental-vm-modules node_modules/jest/bin/jest.js \"tests/end2end/.*\" --watch",
+    "test": "npm run build && npm run lint:nofix && npm run test:unit && npm run test:end2end"
   },
   "repository": {
     "type": "git",

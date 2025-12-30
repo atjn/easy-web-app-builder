@@ -1,0 +1,8 @@
+* {
+	background: url("small-balloons.jpg");
+	background: image-set(url("small-balloons.jpg") 1x type(TEST-FIXME));
+}
+* {
+	background-image: url("larger-balloons.jpg");
+	background-image: image-set(url("larger-balloons.jpg") 1x type(TEST-FIXME));
+}
